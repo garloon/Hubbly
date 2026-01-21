@@ -1,4 +1,4 @@
-﻿namespace Hubbly.Application.Features.Auth.Dtos;
+﻿namespace Hubbly.Domain.Dtos.Auth;
 
 public class RefreshTokenRequestDto
 {

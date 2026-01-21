@@ -1,6 +1,6 @@
-﻿using Hubbly.Application.Features.Auth.Dtos;
+﻿using Hubbly.Domain.Dtos.Auth;
 
-namespace Hubbly.Application.Common.Interfaces;
+namespace Hubbly.Domain.Interfaces;
 
 public interface IAuthService
 {

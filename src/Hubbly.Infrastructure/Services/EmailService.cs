@@ -1,4 +1,4 @@
-﻿using Hubbly.Application.Common.Interfaces;
+﻿using Hubbly.Domain.Interfaces;
 using Hubbly.Application.Common.Models;
 using MailKit.Net.Smtp;
 using MailKit.Security;

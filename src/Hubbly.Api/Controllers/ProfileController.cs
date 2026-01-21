@@ -1,4 +1,4 @@
-﻿using Hubbly.Application.Features.Auth.Dtos;
+﻿using Hubbly.Domain.Dtos.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;

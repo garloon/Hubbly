@@ -1,5 +1,5 @@
-﻿using Hubbly.Application.Common.Interfaces;
-using Hubbly.Application.Features.Auth.Dtos;
+﻿using Hubbly.Domain.Dtos.Auth;
+using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;

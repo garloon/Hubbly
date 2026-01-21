@@ -1,4 +1,4 @@
-﻿using Hubbly.Application.Common.Interfaces;
+﻿using Hubbly.Domain.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Hubbly.Infrastructure.Services;

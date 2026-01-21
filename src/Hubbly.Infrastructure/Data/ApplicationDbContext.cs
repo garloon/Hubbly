@@ -1,5 +1,6 @@
 ﻿using Hubbly.Domain.Common;
 using Hubbly.Domain.Entities;
+using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Hubbly.Infrastructure.Data;
 
-public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
+public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -19,9 +20,23 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     public DbSet<RoomMember> RoomMembers { get; set; }
     public DbSet<Message> Messages { get; set; }
 
+    DbSet<User> IApplicationDbContext.Users => Users;
+    DbSet<ChatRoom> IApplicationDbContext.ChatRooms => ChatRooms;
+    DbSet<RoomMember> IApplicationDbContext.RoomMembers => RoomMembers;
+    DbSet<Message> IApplicationDbContext.Messages => Messages;
+
+    IQueryable<TEntity> IApplicationDbContext.Set<TEntity>() where TEntity : class
+    {
+        return base.Set<TEntity>();
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<ChatRoom>().ToTable("ChatRooms");
+        builder.Entity<RoomMember>().ToTable("RoomMembers");
+        builder.Entity<Message>().ToTable("Messages");
 
         // Конфигурация User
         builder.Entity<User>(entity =>

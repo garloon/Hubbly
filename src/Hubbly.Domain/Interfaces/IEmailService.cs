@@ -1,4 +1,4 @@
-﻿namespace Hubbly.Application.Common.Interfaces;
+﻿namespace Hubbly.Domain.Interfaces;
 
 public interface IEmailService
 {

@@ -1,6 +1,6 @@
-﻿using Hubbly.Application.Common.Interfaces;
-using Hubbly.Application.Features.Auth.Dtos;
+﻿using Hubbly.Domain.Dtos.Auth;
 using Hubbly.Domain.Entities;
+using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
