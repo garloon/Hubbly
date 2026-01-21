@@ -15,21 +15,16 @@ public class InMemoryCacheService : ICacheService
     public Task<T?> GetAsync<T>(string key)
     {
         var value = _memoryCache.Get<T>(key);
+        Console.WriteLine($"InMemoryCache Get: Key={key}, Value={value}"); // Добавьте логирование
         return Task.FromResult(value);
     }
 
     public Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
     {
-        var options = new MemoryCacheEntryOptions();
+        Console.WriteLine($"InMemoryCache Set: Key={key}, Value={value}, Expiry={expiry}"); // Добавьте логирование
 
-        if (expiry.HasValue)
-        {
-            options.SetAbsoluteExpiration(expiry.Value);
-        }
-        else
-        {
-            options.SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
-        }
+        var options = new MemoryCacheEntryOptions();
+        options.SetAbsoluteExpiration(expiry ?? TimeSpan.FromMinutes(10));
 
         _memoryCache.Set(key, value, options);
         return Task.CompletedTask;

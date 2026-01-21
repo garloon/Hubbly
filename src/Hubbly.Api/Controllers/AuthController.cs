@@ -22,31 +22,48 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Email))
         {
-            return BadRequest(new { error = "Email is required" });
+            return BadRequest(new { success = false, error = "Email is required" });
         }
 
         var result = await _authService.RequestLoginAsync(request.Email);
 
         if (result.Success)
         {
-            return Ok(new { message = "OTP code sent to email" });
+            return Ok(new
+            {
+                success = true,
+                message = "OTP code sent to email",
+                timestamp = DateTime.UtcNow
+            });
         }
 
-        return BadRequest(new { error = result.Error });
+        return BadRequest(new
+        {
+            success = false,
+            error = result.Error
+        });
     }
 
     [HttpPost("verify-otp")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request)
     {
+        Console.WriteLine($"=== VerifyOtp called ===");
+        Console.WriteLine($"Email: {request.Email}");
+        Console.WriteLine($"OTP Code: {request.OtpCode}");
+
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.OtpCode))
         {
+            Console.WriteLine($"Error: Email or OTP is empty");
             return BadRequest(new { error = "Email and OTP code are required" });
         }
 
         var result = await _authService.VerifyOtpAsync(request.Email, request.OtpCode);
 
+        Console.WriteLine($"AuthService result: Success={result.Success}, Error={result.Error}");
+
         if (result.Success)
         {
+            Console.WriteLine($"Verification successful for email: {request.Email}");
             return Ok(new
             {
                 token = result.Token,
@@ -54,6 +71,7 @@ public class AuthController : ControllerBase
             });
         }
 
+        Console.WriteLine($"Verification failed: {result.Error}");
         return Unauthorized(new { error = result.Error });
     }
 

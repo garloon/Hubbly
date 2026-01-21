@@ -33,15 +33,22 @@ builder.Services.AddScoped<IChatService, ChatService>();
 // CORS для мобильного приложения
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowTestServer", policy =>
+    options.AddPolicy("AllowMobile", policy =>
     {
-        policy.WithOrigins("http://localhost:5500")
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+        // Разрешаем только определенные origin
+        policy.WithOrigins(
+                "http://localhost",        // Локальная разработка
+                "http://localhost:*",      // Все локальные порты
+                "http://192.168.1.203",    // Ваш конкретный IP
+                "http://192.168.1.203:*",  // Все порты вашего IP
+                "http://10.0.2.2",         // Android эмулятор
+                "http://10.0.2.2:*"        // Все порты эмулятора
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials(); // Теперь можно, так как origin указаны явно
     });
 });
-
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -135,8 +142,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
-app.UseHttpsRedirection();
-app.UseCors("AllowTestServer");
+//app.UseHttpsRedirection();
+app.UseCors("AllowMobile");
 
 app.UseAuthentication(); // Добавляем аутентификацию
 app.UseCurrentUser();
@@ -207,4 +214,4 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.Run();
+app.Run("http://0.0.0.0:5081");

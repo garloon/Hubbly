@@ -1,11 +1,13 @@
-﻿namespace Hubbly.Mobile;
+﻿using Hubbly.Mobile.Views;
+
+namespace Hubbly.Mobile;
 
 public partial class App : IApplication
 {
-	public App()
-	{
-		InitializeComponent();
+    public App()
+    {
+        InitializeComponent();
 
-		MainPage = new AppShell();
-	}
+        MainPage = new NavigationPage(new MainPage());
+    }
 }

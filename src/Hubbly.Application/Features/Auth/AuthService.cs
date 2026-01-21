@@ -3,6 +3,7 @@ using Hubbly.Domain.Entities;
 using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -16,37 +17,48 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
     private readonly ICacheService _cacheService;
+    private readonly ILogger<AuthService> _logger; // Добавили логгер
 
     public AuthService(
         UserManager<User> userManager,
         IEmailService emailService,
         IConfiguration configuration,
-        ICacheService cacheService)
+        ICacheService cacheService,
+        ILogger<AuthService> logger) // Добавили в конструктор
     {
         _userManager = userManager;
         _emailService = emailService;
         _configuration = configuration;
         _cacheService = cacheService;
+        _logger = logger;
     }
 
     public async Task<AuthResponseDto> RequestLoginAsync(string email)
     {
         try
         {
+            _logger.LogInformation("RequestLoginAsync called for email: {Email}", email);
+
             // Генерируем OTP код
             var otpCode = GenerateOtpCode();
+            _logger.LogInformation("Generated OTP: {OtpCode} for email: {Email}", otpCode, email);
 
             // Сохраняем в кэш на 10 минут
             var cacheKey = $"otp:{email}";
+            _logger.LogInformation("Saving to cache with key: {CacheKey}", cacheKey);
+
             await _cacheService.SetAsync(cacheKey, otpCode, TimeSpan.FromMinutes(10));
 
             // Отправляем email
             await _emailService.SendOtpEmailAsync(email, otpCode);
 
+            _logger.LogInformation("OTP email sent successfully to: {Email}", email);
+
             return new AuthResponseDto { Success = true };
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error in RequestLoginAsync for email: {Email}", email);
             return new AuthResponseDto { Success = false, Error = ex.Message };
         }
     }
@@ -55,24 +67,35 @@ public class AuthService : IAuthService
     {
         try
         {
+            _logger.LogInformation("VerifyOtpAsync called for email: {Email}, OTP: {OtpCode}", email, otpCode);
+
             // Проверяем OTP код
             var cacheKey = $"otp:{email}";
+            _logger.LogInformation("Checking cache with key: {CacheKey}", cacheKey);
+
             var cachedOtp = await _cacheService.GetAsync<string>(cacheKey);
+
+            _logger.LogInformation("Cached OTP: {CachedOtp}, Provided OTP: {ProvidedOtp}",
+                cachedOtp ?? "NULL", otpCode);
 
             if (cachedOtp == null || cachedOtp != otpCode)
             {
+                _logger.LogWarning("OTP verification failed for email: {Email}. Cache: {Cached}, Provided: {Provided}",
+                    email, cachedOtp, otpCode);
                 return new AuthResponseDto { Success = false, Error = "Неверный или устаревший код" };
             }
+
+            _logger.LogInformation("OTP verified successfully for email: {Email}", email);
 
             // Удаляем использованный OTP
             await _cacheService.RemoveAsync(cacheKey);
 
             // Находим или создаем пользователя
             var user = await _userManager.FindByEmailAsync(email);
-            var isNewUser = false;
 
             if (user == null)
             {
+                _logger.LogInformation("Creating new user for email: {Email}", email);
                 // Создаем нового пользователя
                 user = new User
                 {
@@ -85,6 +108,8 @@ public class AuthService : IAuthService
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                 {
+                    _logger.LogError("Failed to create user: {Errors}",
+                        string.Join(", ", result.Errors.Select(e => e.Description)));
                     return new AuthResponseDto
                     {
                         Success = false,
@@ -92,14 +117,16 @@ public class AuthService : IAuthService
                     };
                 }
 
-                isNewUser = true;
-
-                // TODO: Добавить пользователя в комнату для новичков
-                // await AddUserToNoviceRoom(user.Id);
+                _logger.LogInformation("New user created with ID: {UserId}", user.Id);
+            }
+            else
+            {
+                _logger.LogInformation("Existing user found with ID: {UserId}", user.Id);
             }
 
             // Генерируем JWT токен
             var token = await GenerateJwtTokenAsync(user);
+            _logger.LogInformation("JWT token generated for user: {UserId}", user.Id);
 
             return new AuthResponseDto
             {
@@ -116,6 +143,7 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error in VerifyOtpAsync for email: {Email}", email);
             return new AuthResponseDto { Success = false, Error = ex.Message };
         }
     }
@@ -161,8 +189,12 @@ public class AuthService : IAuthService
 
     private string GenerateOtpCode()
     {
-        var random = new Random();
-        return random.Next(100000, 999999).ToString(); // 6-значный код
+        // Используем криптографически безопасный генератор
+        var bytes = new byte[4];
+        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        rng.GetBytes(bytes);
+        var randomNumber = BitConverter.ToInt32(bytes, 0) & 0x7FFFFFFF; // Только положительные числа
+        return (100000 + (randomNumber % 900000)).ToString(); // 6-значный код от 100000 до 999999
     }
 
     private string GenerateDisplayName(string email)

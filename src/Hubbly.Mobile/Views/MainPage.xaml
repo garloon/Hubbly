@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Hubbly.Mobile.Views.MainPage"
+             Title="Hubbly">
+
+    <ContentPage.Content>
+        <VerticalStackLayout Spacing="20" Padding="30">
+            <Label Text="🚀 Hubbly Chat" 
+                   FontSize="32"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+
+            <Label Text="Добро пожаловать в прототип!" 
+                   FontSize="16"
+                   HorizontalOptions="Center"
+                   TextColor="Gray" />
+
+            <Button Text="Начать тест" 
+                    Clicked="OnTestClicked"
+                    BackgroundColor="#512BD4"
+                    TextColor="White"
+                    CornerRadius="10"
+                    HeightRequest="50"
+                    FontSize="16"
+                    FontAttributes="Bold" />
+
+            <Button Text="Перейти к входу" 
+                    Clicked="OnGoToLoginClicked"
+                    BackgroundColor="Gray"
+                    TextColor="White"
+                    CornerRadius="10"
+                    HeightRequest="50"
+                    FontSize="16" />
+        </VerticalStackLayout>
+    </ContentPage.Content>
+
+</ContentPage>
