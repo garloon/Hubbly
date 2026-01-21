@@ -42,4 +42,45 @@ public partial class MainPage : ContentPage
     {
         await Navigation.PushAsync(new LoginPage());
     }
+
+    private async void OnRoomsClicked(object sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new RoomsPage());
+    }
+
+    private async void OnTestTokenClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            var tokenStorage = MauiApplication.Current.Services.GetService<ITokenStorage>();
+            var token = await tokenStorage.GetTokenAsync();
+
+            if (string.IsNullOrEmpty(token))
+            {
+                await DisplayAlert("Ошибка", "Токен не найден", "OK");
+                return;
+            }
+
+            // Тестируем токен
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await client.GetAsync($"http://192.168.1.203:5081/api/auth/test-token");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                await DisplayAlert("Успех!", $"Токен работает!\n{content}", "OK");
+            }
+            else
+            {
+                await DisplayAlert("Ошибка", $"Токен не работает: {response.StatusCode}", "OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Ошибка", $"Ошибка: {ex.Message}", "OK");
+        }
+    }
 }

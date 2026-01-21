@@ -1,7 +1,6 @@
-﻿using Hubbly.Domain.Enums;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
-namespace Hubbly.Domain.Dtos.Rooms;
+namespace Hubbly.Domain.Dtos.Client;
 
 public class RoomDto
 {
@@ -10,7 +9,7 @@ public class RoomDto
     public string? Description { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public RoomType Type { get; set; }
+    public string Type { get; set; } = string.Empty;
 
     public Guid CreatorId { get; set; }
     public string CreatorName { get; set; } = string.Empty;

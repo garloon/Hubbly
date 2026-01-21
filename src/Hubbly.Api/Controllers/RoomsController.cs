@@ -28,7 +28,27 @@ public class RoomsController : BaseApiController
             return Unauthorized();
 
         var rooms = await _roomService.GetPublicRoomsAsync(_currentUserService.UserId.Value, page, pageSize);
-        return Ok(rooms);
+
+        // Маппим из RoomDto (серверного) в Client.RoomDto
+        var clientRooms = rooms.Select(r => new RoomDto
+        {
+            Id = r.Id,
+            Title = r.Title,
+            Description = r.Description,
+            Type = r.Type,
+            CreatorId = r.CreatorId,
+            CreatorName = r.CreatorName,
+            CreatorAvatarUrl = r.CreatorAvatarUrl,
+            MemberCount = r.MemberCount,
+            OnlineCount = r.OnlineCount,
+            MaxMembers = r.MaxMembers,
+            IsMember = r.IsMember,
+            IsAdmin = r.IsAdmin,
+            CreatedAt = r.CreatedAt,
+            LastActivityAt = r.LastActivityAt
+        }).ToList();
+
+        return Ok(clientRooms);
     }
 
     [HttpGet("my")]

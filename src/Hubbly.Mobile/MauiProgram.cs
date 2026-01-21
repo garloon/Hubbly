@@ -33,7 +33,10 @@ public static class MauiProgram
             Timeout = TimeSpan.FromSeconds(30)
         });
 
-        // API сервисы через Refit
+        builder.Services.AddSingleton<ITokenStorage, SecureStorageTokenService>();
+        builder.Services.AddTransient<AuthenticatedHttpClientHandler>();
+
+        // API сервисы через Refit с авторизацией
         builder.Services.AddRefitClient<IAuthApiService>()
             .ConfigureHttpClient((sp, client) =>
             {
@@ -41,17 +44,25 @@ public static class MauiProgram
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // IChatApiService с добавлением токена
+        builder.Services.AddRefitClient<IChatApiService>()
+            .ConfigureHttpClient((sp, client) =>
+            {
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddHttpMessageHandler<AuthenticatedHttpClientHandler>();
+
         // Добавим сервис для работы с API
         builder.Services.AddSingleton<IApiService, ApiService>();
 
-        // Локальные сервисы
-        builder.Services.AddSingleton<ITokenStorage, SecureStorageTokenService>();
         builder.Services.AddSingleton<INavigationService, NavigationService>();
 
         // Страницы
         builder.Services.AddTransient<MainPage>();
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<VerifyOtpPage>();
+        builder.Services.AddTransient<RoomsPage>();
 
         return builder.Build();
     }
@@ -59,6 +70,6 @@ public static class MauiProgram
     private static string GetBaseUrl()
     {
         // ВСЕГДА используем ваш IP
-        return "http://192.168.1.203:5081";
+        return "http://192.168.0.102:5081";
     }
 }

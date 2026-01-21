@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Hubbly.Mobile.Views.RoomsPage"
+             Title="Комнаты">
+
+    <ContentPage.Content>
+        <VerticalStackLayout>
+            <Label Text="Список комнат"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   Margin="0,20,0,20" />
+
+            <Button Text="🔄 Обновить"
+                    Clicked="OnRefreshClicked"
+                    BackgroundColor="#512BD4"
+                    TextColor="White"
+                    Margin="20,0,20,10"
+                    HeightRequest="50" />
+
+            <Button Text="➕ Создать комнату"
+                    Clicked="OnCreateRoomClicked"
+                    BackgroundColor="Green"
+                    TextColor="White"
+                    Margin="20,0,20,10"
+                    HeightRequest="50" />
+
+            <CollectionView x:Name="RoomsCollection"
+                            SelectionMode="Single"
+                            SelectionChanged="OnRoomSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="15"
+                               Margin="10,5"
+                               CornerRadius="10"
+                               BackgroundColor="{Binding IsMember, Converter={StaticResource MemberToColorConverter}}">
+                            <VerticalStackLayout>
+                                <Label Text="{Binding Title}"
+                                       FontSize="18"
+                                       TextColor="Green"
+                                       FontAttributes="Bold" />
+
+                                <Label Text="{Binding Description}"
+                                       FontSize="14"
+                                       TextColor="Gray"
+                                       LineBreakMode="WordWrap" />
+
+                                <HorizontalStackLayout>
+                                    <Label Text="👥 "
+                                           FontSize="14" />
+                                    <Label Text="{Binding MemberCount}"
+                                           FontSize="14" />
+
+                                    <Label Text=" | Создатель: "
+                                           FontSize="14"
+                                           TextColor="Gray" />
+                                    <Label Text="{Binding CreatorName}"
+                                           FontSize="14"
+                                           TextColor="Gray" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <ActivityIndicator x:Name="LoadingIndicator"
+                               IsRunning="False"
+                               Color="#512BD4"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+
+            <Label x:Name="ErrorLabel"
+                   Text=""
+                   TextColor="Red"
+                   IsVisible="False"
+                   HorizontalOptions="Center" />
+        </VerticalStackLayout>
+    </ContentPage.Content>
+
+</ContentPage>

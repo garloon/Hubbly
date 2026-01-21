@@ -75,18 +75,15 @@ public class AuthController : ControllerBase
         return Unauthorized(new { error = result.Error });
     }
 
-    [HttpGet("test-protected")]
-    [Authorize] // Требует аутентификации
-    public IActionResult TestProtected()
+    [HttpGet("test-token")]
+    [Authorize]
+    public IActionResult TestToken()
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var email = User.FindFirst(ClaimTypes.Email)?.Value;
-
         return Ok(new
         {
-            message = "You are authenticated!",
-            userId,
-            email,
+            message = "Token is valid!",
+            userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            email = User.FindFirst(ClaimTypes.Email)?.Value,
             timestamp = DateTime.UtcNow
         });
     }
