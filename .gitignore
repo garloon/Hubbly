@@ -1,0 +1,38 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# VS Code
+.vscode/
+
+# Rider
+.idea/
+
+# MAUI
+*/Resources/Raw/*
+
+# NuGet
+packages/
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS
+.vs/
+
+# Build results
+[Bb]uild/
+[Bb]uildArtifacts/
