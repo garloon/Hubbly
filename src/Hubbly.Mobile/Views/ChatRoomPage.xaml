@@ -5,17 +5,126 @@
              Title="Чат">
 
     <ContentPage.ToolbarItems>
-        <ToolbarItem Text="← Назад" 
-                     Clicked="OnBackClicked"
+        <!-- Используем текстовую кнопку вместо иконки -->
+        <ToolbarItem Text="☰"
+                     Clicked="OnMenuClicked"
                      Order="Primary"
                      Priority="0" />
-        <ToolbarItem Text="🔄" 
-                     Clicked="OnRefreshClicked"
-                     Order="Primary"
-                     Priority="1" />
     </ContentPage.ToolbarItems>
 
-    <ContentPage.Content>
+    <Grid>
+        <!-- Сайдбар (скрыт по умолчанию) -->
+        <Frame x:Name="Sidebar"
+               Padding="0"
+               BackgroundColor="White"
+               HorizontalOptions="Start"
+               WidthRequest="280"
+               IsVisible="False"
+               TranslationX="-280"
+               HasShadow="True">
+
+            <VerticalStackLayout Spacing="0">
+                <!-- Заголовок сайдбара -->
+                <Grid BackgroundColor="#512BD4" HeightRequest="120">
+                    <VerticalStackLayout Padding="20" Spacing="10">
+                        <Label Text="💬"
+                               FontSize="24"
+                               TextColor="White" />
+
+                        <Label x:Name="SidebarUserName"
+                               Text="Гость"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               TextColor="White" />
+
+                        <Label x:Name="SidebarUserStatus"
+                               Text="гость"
+                               FontSize="12"
+                               TextColor="#CCCCCC" />
+                    </VerticalStackLayout>
+                </Grid>
+
+                <!-- Меню -->
+                <VerticalStackLayout Spacing="0" Padding="0">
+
+                    <Grid Padding="15,10" 
+                          BackgroundColor="White"
+                          HeightRequest="50">
+                        <Label Text="Профиль"
+                               FontSize="16"
+                               VerticalOptions="Center" />
+                        <Label Text="›"
+                               FontSize="20"
+                               TextColor="#888888"
+                               HorizontalOptions="End"
+                               VerticalOptions="Center" />
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnProfileTapped" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#F0F0F0" />
+
+                    <Grid Padding="15,10" 
+                          BackgroundColor="White"
+                          HeightRequest="50">
+                        <Label Text="Личные сообщения"
+                               FontSize="16"
+                               VerticalOptions="Center" />
+                        <Label Text="скоро"
+                               FontSize="12"
+                               TextColor="#888888"
+                               HorizontalOptions="End"
+                               VerticalOptions="Center" />
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#F0F0F0" />
+
+                    <Grid Padding="15,10" 
+                          BackgroundColor="White"
+                          HeightRequest="50">
+                        <Label Text="Все комнаты"
+                               FontSize="16"
+                               VerticalOptions="Center" />
+                        <Label Text="›"
+                               FontSize="20"
+                               TextColor="#888888"
+                               HorizontalOptions="End"
+                               VerticalOptions="Center" />
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnRoomsTapped" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#F0F0F0" />
+
+                    <Grid Padding="15,10" 
+                          BackgroundColor="White"
+                          HeightRequest="50">
+                        <Label Text="Настройки"
+                               FontSize="16"
+                               VerticalOptions="Center" />
+                    </Grid>
+
+                    <BoxView HeightRequest="1" BackgroundColor="#F0F0F0" />
+
+                    <Grid Padding="15,10" 
+                          BackgroundColor="#FFF5F5"
+                          HeightRequest="50">
+                        <Label Text="Выйти"
+                               FontSize="16"
+                               TextColor="Red"
+                               VerticalOptions="Center" />
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnLogoutTapped" />
+                        </Grid.GestureRecognizers>
+                    </Grid>
+
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </Frame>
+
+        <!-- Основной контент -->
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -23,83 +132,145 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Заголовок комнаты -->
+            <!-- Верхний тулбар -->
             <Frame Grid.Row="0"
                    Padding="15"
                    BackgroundColor="#512BD4"
                    CornerRadius="0">
-                <VerticalStackLayout>
-                    <Label x:Name="RoomTitleLabel"
-                           Text="Название комнаты"
-                           FontSize="18"
-                           FontAttributes="Bold"
-                           TextColor="White" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                    <Label x:Name="RoomInfoLabel"
-                           Text="Информация"
-                           FontSize="12"
-                           TextColor="White" />
-                </VerticalStackLayout>
+                    <!-- Кнопка меню (дублирует ToolbarItem для удобства) -->
+                    <Button Grid.Column="0"
+                            Text="☰"
+                            Clicked="OnMenuClicked"
+                            BackgroundColor="Transparent"
+                            TextColor="White"
+                            FontSize="20"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            Padding="0"
+                            Margin="0,0,10,0" />
+
+                    <!-- Название комнаты -->
+                    <VerticalStackLayout Grid.Column="1" 
+                                         Spacing="2"
+                                         HorizontalOptions="Center"
+                                         VerticalOptions="Center">
+                        <Label x:Name="RoomTitleLabel"
+                               Text="Новички"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               TextColor="White"
+                               HorizontalOptions="Center" />
+
+                        <Label x:Name="RoomInfoLabel"
+                               Text="1/100 онлайн"
+                               FontSize="12"
+                               TextColor="#CCCCCC"
+                               HorizontalOptions="Center" />
+                    </VerticalStackLayout>
+
+                    <!-- Онлайн счетчик -->
+                    <Frame Grid.Column="2"
+                           Padding="8,4"
+                           BackgroundColor="White"
+                           CornerRadius="12">
+                        <Label x:Name="OnlineCountLabel"
+                               Text="1"
+                               FontSize="12"
+                               FontAttributes="Bold"
+                               TextColor="#512BD4"
+                               HorizontalOptions="Center" />
+                    </Frame>
+                </Grid>
             </Frame>
 
             <!-- Список сообщений -->
             <CollectionView Grid.Row="1"
                             x:Name="MessagesCollection"
-                            VerticalOptions="FillAndExpand">
+                            VerticalOptions="FillAndExpand"
+                            ItemsLayout="VerticalList">
+
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Frame Padding="10"
-                               Margin="5,2"
-                               CornerRadius="10"
-                               BackgroundColor="LightGray">
-                            <VerticalStackLayout>
-                                <HorizontalStackLayout>
-                                    <Label Text="{Binding SenderName}"
+                        <Frame Padding="12"
+                               Margin="10,5,10,5"
+                               CornerRadius="15"
+                               BackgroundColor="#F5F5F5"
+                               HorizontalOptions="Start">
+
+                            <VerticalStackLayout Spacing="4">
+                                <!-- Заголовок сообщения -->
+                                <HorizontalStackLayout Spacing="6">
+                                    <Label Text="{Binding UserNickname}"
                                            FontSize="14"
                                            FontAttributes="Bold"
-                                           TextColor="Black" />
+                                           TextColor="#512BD4" />
 
-                                    <Label Text=" • "
-                                           FontSize="14" />
+                                    <Label Text="•"
+                                           FontSize="14"
+                                           TextColor="#888888" />
 
                                     <Label Text="{Binding CreatedAt, StringFormat='{0:HH:mm}'}"
                                            FontSize="12"
-                                           TextColor="Gray" />
+                                           TextColor="#888888" />
                                 </HorizontalStackLayout>
 
+                                <!-- Текст сообщения -->
                                 <Label Text="{Binding Text}"
                                        FontSize="16"
                                        LineBreakMode="WordWrap"
-                                       Margin="0,5,0,0" />
+                                       TextColor="Black" />
                             </VerticalStackLayout>
                         </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <!-- Поле ввода сообщения -->
+            <!-- Поле ввода -->
             <Grid Grid.Row="2"
                   Padding="10"
-                  BackgroundColor="Gray">
+                  BackgroundColor="White">
+
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Entry x:Name="MessageEntry"
-                       Grid.Column="0"
-                       Placeholder="Введите сообщение..."
-                       Completed="OnMessageSendRequested" />
+                <Frame Grid.Column="0"
+                       Padding="0"
+                       CornerRadius="20"
+                       BackgroundColor="#F5F5F5"
+                       HasShadow="False">
 
-                <Button Grid.Column="1"
-                        Text="📤"
+                    <Entry x:Name="MessageEntry"
+                           Placeholder="Введите сообщение..."
+                           TextChanged="OnMessageTextChanged"
+                           Completed="OnSendMessageRequested"
+                           Margin="15,0"
+                           BackgroundColor="Transparent"
+                           ClearButtonVisibility="WhileEditing" />
+                </Frame>
+
+                <Button x:Name="SendButton"
+                        Grid.Column="1"
+                        Text="➤"
                         Clicked="OnSendClicked"
                         BackgroundColor="#512BD4"
                         TextColor="White"
-                        WidthRequest="50"
-                        Margin="10,0,0,0" />
+                        WidthRequest="45"
+                        HeightRequest="45"
+                        Margin="10,0,0,0"
+                        IsEnabled="False" />
+
             </Grid>
 
+            <!-- Индикатор загрузки -->
             <ActivityIndicator x:Name="LoadingIndicator"
                                Grid.Row="1"
                                IsRunning="False"
@@ -107,6 +278,6 @@
                                VerticalOptions="Center"
                                HorizontalOptions="Center" />
         </Grid>
-    </ContentPage.Content>
+    </Grid>
 
 </ContentPage>

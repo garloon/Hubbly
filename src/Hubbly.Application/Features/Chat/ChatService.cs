@@ -1,6 +1,5 @@
-﻿using Hubbly.Domain.Dtos.Messages;
+﻿using Hubbly.Domain.DTOs;
 using Hubbly.Domain.Entities;
-using Hubbly.Domain.Enums;
 using Hubbly.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,303 +9,162 @@ namespace Hubbly.Application.Features.Chat;
 public class ChatService : IChatService
 {
     private readonly IApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly IRoomService _roomService;
     private readonly ILogger<ChatService> _logger;
 
     public ChatService(
         IApplicationDbContext context,
-        ICurrentUserService currentUserService,
+        IRoomService roomService,
         ILogger<ChatService> logger)
     {
         _context = context;
-        _currentUserService = currentUserService;
+        _roomService = roomService;
         _logger = logger;
     }
 
     public async Task<MessageDto> SendMessageAsync(Guid userId, Guid roomId, string text)
     {
-        return await SendMessageAsync(userId, roomId, new SendMessageDto { Text = text });
-    }
+        // Проверяем, что пользователь в комнате
+        var isInRoom = await _roomService.IsUserInRoomAsync(userId, roomId);
+        if (!isInRoom)
+        {
+            // Автоматически добавляем пользователя в комнату
+            var joined = await _roomService.JoinRoomAsync(userId, roomId);
+            if (!joined)
+                throw new UnauthorizedAccessException("Cannot join room or room is full");
+        }
 
-    public async Task<MessageDto> SendMessageAsync(Guid userId, Guid roomId, SendMessageDto dto)
-    {
-        // Проверяем доступ к комнате
-        var hasAccess = await HasAccessToRoomAsync(userId, roomId);
-        if (!hasAccess)
-            throw new UnauthorizedAccessException("No access to room");
+        // Проверяем ограничение на длину сообщения
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("Message text cannot be empty");
 
-        var user = await _context.Users.FindAsync(userId);
-        var room = await _context.ChatRooms.FindAsync(roomId);
+        if (text.Length > 2000)
+            throw new ArgumentException("Message cannot exceed 2000 characters");
 
-        if (user == null || room == null)
-            throw new ArgumentException("User or room not found");
+        // Проверяем rate limiting (5 сообщений в минуту)
+        var messagesLastMinute = await _context.Messages
+            .CountAsync(m => m.UserId == userId &&
+                            m.CreatedAt > DateTime.UtcNow.AddMinutes(-1));
 
+        if (messagesLastMinute >= 5)
+            throw new InvalidOperationException("Rate limit exceeded. Please wait before sending more messages.");
+
+        // Создаем сообщение
         var message = new Message
         {
-            Text = dto.Text,
-            SenderId = userId,
-            RoomId = roomId,
-            Type = dto.Type,
-            ReplyToMessageId = dto.ReplyToMessageId
+            Text = text.Trim(),
+            UserId = userId,
+            RoomId = roomId
         };
 
         _context.Messages.Add(message);
         await _context.SaveChangesAsync();
 
+        // Получаем данные пользователя для DTO
+        var user = await _context.Users.FindAsync(userId);
+
         _logger.LogInformation("Message {MessageId} sent by {UserId} in room {RoomId}",
             message.Id, userId, roomId);
 
-        return await MapToMessageDtoAsync(message);
-    }
-
-    public async Task<EditMessageResult> EditMessageAsync(Guid userId, Guid messageId, string newText)
-    {
-        try
-        {
-            var message = await _context.Messages
-                .Include(m => m.Sender)
-                .FirstOrDefaultAsync(m => m.Id == messageId && !m.IsDeleted);
-
-            if (message == null)
-                return new EditMessageResult { Success = false, Error = "Message not found" };
-
-            // Проверяем права
-            if (message.SenderId != userId)
-                return new EditMessageResult { Success = false, Error = "Can only edit own messages" };
-
-            // Проверяем временные ограничения
-            var timeSinceCreation = DateTime.UtcNow - message.CreatedAt;
-            if (timeSinceCreation > TimeSpan.FromMinutes(15))
-                return new EditMessageResult { Success = false, Error = "Message can only be edited within 15 minutes of creation" };
-
-            message.Text = newText;
-            message.IsEdited = true;
-            message.EditedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Message {MessageId} edited by {UserId}", messageId, userId);
-
-            return new EditMessageResult
-            {
-                Success = true,
-                MessageId = messageId,
-                RoomId = message.RoomId
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error editing message {MessageId}", messageId);
-            return new EditMessageResult { Success = false, Error = ex.Message };
-        }
-    }
-
-    public async Task<DeleteMessageResult> DeleteMessageAsync(Guid userId, Guid messageId)
-    {
-        try
-        {
-            var message = await _context.Messages
-                .Include(m => m.Sender)
-                .FirstOrDefaultAsync(m => m.Id == messageId && !m.IsDeleted);
-
-            if (message == null)
-                return new DeleteMessageResult { Success = false, Error = "Message not found" };
-
-            // Проверяем права (отправитель или админ комнаты)
-            var isAdmin = await IsRoomAdminAsync(userId, message.RoomId);
-            if (message.SenderId != userId && !isAdmin)
-                return new DeleteMessageResult { Success = false, Error = "No permission to delete this message" };
-
-            message.IsDeleted = true;
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Message {MessageId} deleted by {UserId}", messageId, userId);
-
-            return new DeleteMessageResult
-            {
-                Success = true,
-                MessageId = messageId,
-                RoomId = message.RoomId
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting message {MessageId}", messageId);
-            return new DeleteMessageResult { Success = false, Error = ex.Message };
-        }
-    }
-
-    public async Task<IEnumerable<MessageDto>> GetRoomMessagesAsync(
-        Guid roomId, Guid userId, int page = 1, int pageSize = 50)
-    {
-        // Проверяем доступ
-        var hasAccess = await HasAccessToRoomAsync(userId, roomId);
-        if (!hasAccess)
-            throw new UnauthorizedAccessException("No access to room");
-
-        var messages = await _context.Messages
-            .Include(m => m.Sender)
-            .Include(m => m.ReplyToMessage)
-                .ThenInclude(rm => rm!.Sender)
-            .Where(m => m.RoomId == roomId && !m.IsDeleted)
-            .OrderByDescending(m => m.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var result = new List<MessageDto>();
-        foreach (var message in messages.OrderBy(m => m.CreatedAt)) // Возвращаем в правильном порядке
-        {
-            result.Add(await MapToMessageDtoAsync(message));
-        }
-
-        return result;
-    }
-
-    public async Task<MessageDto?> GetMessageByIdAsync(Guid messageId, Guid userId)
-    {
-        var message = await _context.Messages
-            .Include(m => m.Sender)
-            .Include(m => m.ReplyToMessage)
-                .ThenInclude(rm => rm!.Sender)
-            .FirstOrDefaultAsync(m => m.Id == messageId && !m.IsDeleted);
-
-        if (message == null)
-            return null;
-
-        // Проверяем доступ к комнате
-        var hasAccess = await HasAccessToRoomAsync(userId, message.RoomId);
-        if (!hasAccess)
-            throw new UnauthorizedAccessException("No access to room");
-
-        return await MapToMessageDtoAsync(message);
-    }
-
-    public async Task<bool> JoinRoomAsync(Guid userId, Guid roomId)
-    {
-        // Используем RoomService или дублируем логику
-        var room = await _context.ChatRooms.FindAsync(roomId);
-        if (room == null || room.IsDeleted)
-            return false;
-
-        // Проверяем приватность
-        if (room.Type == RoomType.Private)
-        {
-            var isMember = await _context.RoomMembers
-                .AnyAsync(rm => rm.RoomId == roomId && rm.UserId == userId && !rm.IsBanned);
-
-            if (!isMember && room.CreatorId != userId)
-                return false;
-        }
-
-        // Проверяем существующее членство
-        var existing = await _context.RoomMembers
-            .FirstOrDefaultAsync(rm => rm.RoomId == roomId && rm.UserId == userId);
-
-        if (existing != null)
-        {
-            if (existing.IsBanned)
-                return false;
-            return true;
-        }
-
-        // Добавляем
-        var roomMember = new RoomMember
-        {
-            UserId = userId,
-            RoomId = roomId,
-            IsAdmin = false
-        };
-
-        _context.RoomMembers.Add(roomMember);
-        await _context.SaveChangesAsync();
-
-        return true;
-    }
-
-    public async Task<bool> LeaveRoomAsync(Guid userId, Guid roomId)
-    {
-        var roomMember = await _context.RoomMembers
-            .FirstOrDefaultAsync(rm => rm.RoomId == roomId && rm.UserId == userId);
-
-        if (roomMember == null)
-            return false;
-
-        // Создатель не может покинуть комнату
-        var room = await _context.ChatRooms.FindAsync(roomId);
-        if (room?.CreatorId == userId)
-            return false;
-
-        _context.RoomMembers.Remove(roomMember);
-        await _context.SaveChangesAsync();
-
-        return true;
-    }
-
-    public async Task<int> GetUnreadCountAsync(Guid userId, Guid roomId)
-    {
-        // TODO: Реализовать логику непрочитанных сообщений
-        // Нужно хранить время последнего прочтения для каждого пользователя в каждой комнате
-        return 0;
-    }
-
-    public async Task MarkAsReadAsync(Guid userId, Guid roomId, Guid messageId)
-    {
-        // TODO: Реализовать отметку прочитанных сообщений
-    }
-
-    // Вспомогательные методы
-    private async Task<bool> HasAccessToRoomAsync(Guid userId, Guid roomId)
-    {
-        var room = await _context.ChatRooms.FindAsync(roomId);
-        if (room == null || room.IsDeleted)
-            return false;
-
-        // Публичные комнаты доступны всем
-        if (room.Type == RoomType.Public)
-            return true;
-
-        // Для приватных проверяем членство
-        return await _context.RoomMembers
-            .AnyAsync(rm => rm.RoomId == roomId && rm.UserId == userId && !rm.IsBanned);
-    }
-
-    private async Task<bool> IsRoomAdminAsync(Guid userId, Guid roomId)
-    {
-        return await _context.RoomMembers
-            .AnyAsync(rm => rm.RoomId == roomId && rm.UserId == userId && rm.IsAdmin && !rm.IsBanned);
-    }
-
-    private async Task<MessageDto> MapToMessageDtoAsync(Message message)
-    {
-        var dto = new MessageDto
+        return new MessageDto
         {
             Id = message.Id,
             Text = message.Text,
-            SenderId = message.SenderId,
-            SenderName = message.Sender?.DisplayName ?? "Unknown",
-            SenderAvatarUrl = message.Sender?.AvatarUrl,
-            RoomId = message.RoomId,
-            Type = message.Type,
-            ReplyToMessageId = message.ReplyToMessageId,
-            IsEdited = message.IsEdited,
-            CreatedAt = message.CreatedAt,
-            EditedAt = message.EditedAt
+            UserId = userId,
+            UserNickname = user?.Nickname ?? "Unknown",
+            UserAvatarUrl = user?.AvatarUrl,
+            RoomId = roomId,
+            CreatedAt = message.CreatedAt
         };
+    }
 
-        // Добавляем информацию о сообщении-ответе если есть
-        if (message.ReplyToMessage != null)
-        {
-            dto.ReplyToMessage = new MessageDto
+    public async Task<List<MessageDto>> GetRoomHistoryAsync(Guid roomId, int limit = 50)
+    {
+        // Только по запросу пользователя, не при входе в комнату
+        var messages = await _context.Messages
+            .Include(m => m.User)
+            .Where(m => m.RoomId == roomId && !m.IsDeleted && !m.IsModerated)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+
+        return messages
+            .OrderBy(m => m.CreatedAt) // Возвращаем в хронологическом порядке
+            .Select(m => new MessageDto
             {
-                Id = message.ReplyToMessage.Id,
-                Text = message.ReplyToMessage.Text,
-                SenderId = message.ReplyToMessage.SenderId,
-                SenderName = message.ReplyToMessage.Sender?.DisplayName ?? "Unknown",
-                CreatedAt = message.ReplyToMessage.CreatedAt
-            };
+                Id = m.Id,
+                Text = m.Text,
+                UserId = m.UserId,
+                UserNickname = m.User?.Nickname ?? "Unknown",
+                UserAvatarUrl = m.User?.AvatarUrl,
+                RoomId = m.RoomId,
+                CreatedAt = m.CreatedAt
+            })
+            .ToList();
+    }
+
+    public async Task<bool> DeleteMessageAsync(Guid messageId, string? reason = null)
+    {
+        var message = await _context.Messages.FindAsync(messageId);
+        if (message == null || message.IsDeleted)
+            return false;
+
+        message.IsDeleted = true;
+        message.IsModerated = !string.IsNullOrEmpty(reason);
+        message.DeleteReason = reason;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Message {MessageId} deleted. Reason: {Reason}", messageId, reason ?? "User action");
+
+        return true;
+    }
+
+    public async Task<List<MessageDto>> GetRecentMessagesAsync(Guid roomId, int count = 20)
+    {
+        // Получаем последние N сообщений комнаты
+        var messages = await _context.Messages
+            .Include(m => m.User)
+            .Where(m => m.RoomId == roomId && !m.IsDeleted && !m.IsModerated)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(count)
+            .ToListAsync();
+
+        return messages
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new MessageDto
+            {
+                Id = m.Id,
+                Text = m.Text,
+                UserId = m.UserId,
+                UserNickname = m.User?.Nickname ?? "Unknown",
+                UserAvatarUrl = m.User?.AvatarUrl,
+                RoomId = m.RoomId,
+                CreatedAt = m.CreatedAt
+            })
+            .ToList();
+    }
+
+    // Фоновая задача для очистки старых сообщений (можно вынести в BackgroundService)
+    public async Task CleanupOldMessagesAsync(TimeSpan olderThan)
+    {
+        var cutoffDate = DateTime.UtcNow - olderThan;
+
+        var oldMessages = await _context.Messages
+            .Where(m => m.CreatedAt < cutoffDate && !m.IsDeleted)
+            .Take(1000) // Ограничиваем на одну итерацию
+            .ToListAsync();
+
+        foreach (var message in oldMessages)
+        {
+            message.IsDeleted = true;
+            message.DeleteReason = "Auto-cleanup (older than 30 days)";
         }
 
-        return dto;
+        if (oldMessages.Any())
+        {
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Cleaned up {Count} old messages", oldMessages.Count);
+        }
     }
 }

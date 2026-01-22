@@ -1,30 +1,24 @@
 ﻿using Hubbly.Domain.Common;
 using Hubbly.Domain.Entities;
 using Hubbly.Domain.Interfaces;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Hubbly.Infrastructure.Data;
 
-public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>, IApplicationDbContext
+public class ApplicationDbContext : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
     }
 
-    // DbSets для наших сущностей
-    public DbSet<ChatRoom> ChatRooms { get; set; }
-    public DbSet<RoomMember> RoomMembers { get; set; }
+    // DbSets
+    public DbSet<User> Users { get; set; }
+    public DbSet<Room> Rooms { get; set; }
     public DbSet<Message> Messages { get; set; }
 
-    DbSet<User> IApplicationDbContext.Users => Users;
-    DbSet<ChatRoom> IApplicationDbContext.ChatRooms => ChatRooms;
-    DbSet<RoomMember> IApplicationDbContext.RoomMembers => RoomMembers;
-    DbSet<Message> IApplicationDbContext.Messages => Messages;
-
+    // Для IApplicationDbContext
     IQueryable<TEntity> IApplicationDbContext.Set<TEntity>() where TEntity : class
     {
         return base.Set<TEntity>();
@@ -34,113 +28,142 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<ChatRoom>().ToTable("ChatRooms");
-        builder.Entity<RoomMember>().ToTable("RoomMembers");
-        builder.Entity<Message>().ToTable("Messages");
+        ConfigureUser(builder);
+        ConfigureRoom(builder);
+        ConfigureMessage(builder);
 
-        // Конфигурация User
+        // Создаем начальные данные (системную комнату)
+        SeedInitialData(builder);
+    }
+
+    private static void ConfigureUser(ModelBuilder builder)
+    {
         builder.Entity<User>(entity =>
         {
-            entity.Property(u => u.DisplayName).HasMaxLength(100);
-            entity.Property(u => u.Bio).HasMaxLength(500);
-            entity.HasIndex(u => u.DisplayName);
+            entity.ToTable("Users");
 
-            // Soft delete filter
+            // Индексы
+            entity.HasIndex(u => u.DeviceId).IsUnique();
+            entity.HasIndex(u => u.Email).IsUnique();
+            entity.HasIndex(u => u.Nickname);
+            entity.HasIndex(u => u.LastActivityAt);
+
+            // Ограничения
+            entity.Property(u => u.DeviceId).HasMaxLength(100);
+            entity.Property(u => u.Email).HasMaxLength(100);
+            entity.Property(u => u.Nickname)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(u => u.AvatarUrl).HasMaxLength(500);
+
+            // Soft delete фильтр
             entity.HasQueryFilter(u => !u.IsDeleted);
+
+            // Связи
+            entity.HasMany(u => u.Messages)
+                .WithOne(m => m.User)
+                .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
+    }
 
-        // Конфигурация ChatRoom
-        builder.Entity<ChatRoom>(entity =>
+    private static void ConfigureRoom(ModelBuilder builder)
+    {
+        builder.Entity<Room>(entity =>
         {
-            entity.Property(r => r.Title).HasMaxLength(200).IsRequired();
-            entity.Property(r => r.Description).HasMaxLength(1000);
-            entity.Property(r => r.InviteCode).HasMaxLength(50);
-
-            // Связь с создателем
-            entity.HasOne(r => r.Creator)
-                  .WithMany(u => u.CreatedRooms)
-                  .HasForeignKey(r => r.CreatorId)
-                  .OnDelete(DeleteBehavior.Restrict);
+            entity.ToTable("Rooms");
 
             // Индексы
             entity.HasIndex(r => r.Type);
             entity.HasIndex(r => r.CreatorId);
+            entity.HasIndex(r => r.CurrentUsersCount);
 
-            // Soft delete
+            // Ограничения
+            entity.Property(r => r.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(r => r.Description).HasMaxLength(500);
+            entity.Property(r => r.InviteCode).HasMaxLength(50);
+
+            // Проверка ограничений
+            entity.HasCheckConstraint(
+                "CK_Room_CurrentUsersCount_NonNegative",
+                "\"CurrentUsersCount\" >= 0");
+
+            entity.HasCheckConstraint(
+                "CK_Room_CurrentUsersCount_Limit",
+                "\"CurrentUsersCount\" <= \"MaxUsers\"");
+
+            // Soft delete фильтр
             entity.HasQueryFilter(r => !r.IsDeleted);
-        });
-
-        // Конфигурация RoomMember (многие-ко-многим)
-        builder.Entity<RoomMember>(entity =>
-        {
-            // Составной ключ
-            entity.HasKey(rm => new { rm.UserId, rm.RoomId });
 
             // Связи
-            entity.HasOne(rm => rm.User)
-                  .WithMany(u => u.RoomMemberships)
-                  .HasForeignKey(rm => rm.UserId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(rm => rm.Room)
-                  .WithMany(r => r.Members)
-                  .HasForeignKey(rm => rm.RoomId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            // Индексы
-            entity.HasIndex(rm => rm.UserId);
-            entity.HasIndex(rm => rm.RoomId);
-            entity.HasIndex(rm => rm.IsAdmin);
-
-            // Soft delete
-            entity.HasQueryFilter(rm => !rm.IsDeleted);
+            entity.HasMany(r => r.Messages)
+                .WithOne(m => m.Room)
+                .HasForeignKey(m => m.RoomId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
+    }
 
-        // Конфигурация Message
+    private static void ConfigureMessage(ModelBuilder builder)
+    {
         builder.Entity<Message>(entity =>
         {
-            entity.Property(m => m.Text).IsRequired();
+            entity.ToTable("Messages");
 
-            // Связи
-            entity.HasOne(m => m.Sender)
-                  .WithMany(u => u.Messages)
-                  .HasForeignKey(m => m.SenderId)
-                  .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(m => m.Room)
-                  .WithMany(r => r.Messages)
-                  .HasForeignKey(m => m.RoomId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(m => m.ReplyToMessage)
-                  .WithMany()
-                  .HasForeignKey(m => m.ReplyToMessageId)
-                  .OnDelete(DeleteBehavior.Restrict);
-
-            // Индексы
+            // Индексы (для быстрого поиска по комнате и дате)
             entity.HasIndex(m => m.RoomId);
-            entity.HasIndex(m => m.SenderId);
+            entity.HasIndex(m => new { m.RoomId, m.CreatedAt }).IsDescending(false, true);
+            entity.HasIndex(m => m.UserId);
             entity.HasIndex(m => m.CreatedAt);
+            entity.HasIndex(m => m.IsDeleted);
 
-            // Soft delete
-            entity.HasQueryFilter(m => !m.IsDeleted);
+            // Ограничения
+            entity.Property(m => m.Text)
+                .IsRequired()
+                .HasMaxLength(2000); // Лимит на длину сообщения
+
+            entity.Property(m => m.DeleteReason).HasMaxLength(200);
+
+            // Soft delete фильтр (показываем только неудаленные)
+            entity.HasQueryFilter(m => !m.IsDeleted && !m.IsModerated);
+
+            // Связи уже настроены в User и Room конфигурациях
         });
+    }
+
+    private static void SeedInitialData(ModelBuilder builder)
+    {
+        // Создаем системную комнату "Новички" при миграции
+        var systemRoom = new Room
+        {
+            Id = Guid.NewGuid(),
+            Name = "Новички",
+            Description = "Добро пожаловать в Hubbly! Общайтесь, знакомьтесь, задавайте вопросы.",
+            Type = Domain.Enums.RoomType.System,
+            MaxUsers = 100,
+            CurrentUsersCount = 0,
+            CreatorId = null,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        builder.Entity<Room>().HasData(systemRoom);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         UpdateAuditableEntities();
+        UpdateUserActivity();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     private void UpdateAuditableEntities()
     {
-        // Обновляем BaseEntity
-        var baseEntityEntries = ChangeTracker.Entries()
+        var entries = ChangeTracker.Entries()
             .Where(e => e.Entity is BaseEntity &&
                        (e.State == EntityState.Added || e.State == EntityState.Modified));
 
-        foreach (var entry in baseEntityEntries)
+        foreach (var entry in entries)
         {
             var entity = (BaseEntity)entry.Entity;
 
@@ -153,24 +176,16 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
                 entity.UpdatedAt = DateTime.UtcNow;
             }
         }
+    }
 
-        // Обновляем User (не BaseEntity)
-        var userEntries = ChangeTracker.Entries()
-            .Where(e => e.Entity is User &&
-                       (e.State == EntityState.Added || e.State == EntityState.Modified));
+    private void UpdateUserActivity()
+    {
+        var userEntries = ChangeTracker.Entries<User>()
+            .Where(e => e.State == EntityState.Modified);
 
         foreach (var entry in userEntries)
         {
-            var entity = (User)entry.Entity;
-
-            if (entry.State == EntityState.Added)
-            {
-                entity.CreatedAt = DateTime.UtcNow;
-            }
-            else if (entry.State == EntityState.Modified)
-            {
-                entity.UpdatedAt = DateTime.UtcNow;
-            }
+            entry.Entity.LastActivityAt = DateTime.UtcNow;
         }
     }
 }

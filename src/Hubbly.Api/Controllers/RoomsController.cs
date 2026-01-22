@@ -1,166 +1,154 @@
-﻿using Hubbly.Domain.Dtos.Rooms;
-using Hubbly.Domain.Interfaces;
-using Microsoft.AspNetCore.Authorization;
+﻿using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Hubbly.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
+[Route("api/rooms")]
 public class RoomsController : BaseApiController
 {
     private readonly IRoomService _roomService;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly IUserService _userService;
 
     public RoomsController(
         IRoomService roomService,
-        ICurrentUserService currentUserService)
+        IUserService userService)
     {
         _roomService = roomService;
-        _currentUserService = currentUserService;
+        _userService = userService;
     }
 
-    [HttpGet("public")]
-    public async Task<IActionResult> GetPublicRooms([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    [HttpGet]
+    public async Task<IActionResult> GetAllRooms()
     {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
-
-        var rooms = await _roomService.GetPublicRoomsAsync(_currentUserService.UserId.Value, page, pageSize);
-
-        // Маппим из RoomDto (серверного) в Client.RoomDto
-        var clientRooms = rooms.Select(r => new RoomDto
-        {
-            Id = r.Id,
-            Title = r.Title,
-            Description = r.Description,
-            Type = r.Type,
-            CreatorId = r.CreatorId,
-            CreatorName = r.CreatorName,
-            CreatorAvatarUrl = r.CreatorAvatarUrl,
-            MemberCount = r.MemberCount,
-            OnlineCount = r.OnlineCount,
-            MaxMembers = r.MaxMembers,
-            IsMember = r.IsMember,
-            IsAdmin = r.IsAdmin,
-            CreatedAt = r.CreatedAt,
-            LastActivityAt = r.LastActivityAt
-        }).ToList();
-
-        return Ok(clientRooms);
-    }
-
-    [HttpGet("my")]
-    public async Task<IActionResult> GetMyRooms()
-    {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
-
-        var rooms = await _roomService.GetUserRoomsAsync(_currentUserService.UserId.Value);
-        return Ok(rooms);
-    }
-
-    [HttpGet("{id}/details")]
-    public async Task<IActionResult> GetRoomDetails(Guid id)
-    {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
 
         try
         {
-            var roomDetails = await _roomService.GetRoomDetailsAsync(id, _currentUserService.UserId.Value);
-            return OkOrNotFound(roomDetails, "Room not found or access denied");
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> CreateRoom([FromBody] CreateRoomDto request)
-    {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
-
-        if (string.IsNullOrWhiteSpace(request.Title))
-            return BadRequestWithError("Title is required");
-
-        try
-        {
-            var room = await _roomService.CreateRoomAsync(_currentUserService.UserId.Value, request);
-            return CreatedAtAction(nameof(GetRoom), new { id = room.Id }, room);
+            var rooms = await _roomService.GetAllRoomsAsync();
+            return Ok(rooms);
         }
         catch (Exception ex)
         {
-            return BadRequestWithError($"Failed to create room: {ex.Message}");
+            return BadRequestWithError($"Failed to get rooms: {ex.Message}");
+        }
+    }
+
+    [HttpGet("available-system")]
+    public async Task<IActionResult> GetAvailableSystemRoom()
+    {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
+        try
+        {
+            var room = await _roomService.GetOrCreateAvailableSystemRoomAsync();
+            return Ok(room);
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to get available system room: {ex.Message}");
+        }
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetRoomById(Guid id)
+    {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
+        try
+        {
+            var room = await _roomService.GetRoomByIdAsync(id);
+            return OkOrNotFound(room, "Room not found");
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to get room: {ex.Message}");
         }
     }
 
     [HttpPost("{id}/join")]
-    public async Task<IActionResult> JoinRoom(Guid id, [FromBody] JoinRoomRequest? request = null)
+    public async Task<IActionResult> JoinRoom(Guid id)
     {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
 
-        var success = await _roomService.JoinRoomAsync(
-            _currentUserService.UserId.Value,
-            id,
-            request?.InviteCode);
+        try
+        {
+            var success = await _roomService.JoinRoomAsync(CurrentUserId!.Value, id);
 
-        if (success)
-            return Ok(new { message = "Successfully joined the room" });
+            if (success)
+            {
+                // Обновляем last_room_id у пользователя
+                await _userService.UpdateLastActivityAsync(CurrentUserId!.Value);
 
-        return BadRequestWithError("Failed to join room. Room may be full, private, or invite code is invalid.");
+                return Ok(new
+                {
+                    message = "Successfully joined the room",
+                    roomId = id
+                });
+            }
+
+            return BadRequestWithError("Failed to join room. Room may be full or not found.");
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to join room: {ex.Message}");
+        }
     }
 
     [HttpPost("{id}/leave")]
     public async Task<IActionResult> LeaveRoom(Guid id)
     {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
 
-        var success = await _roomService.LeaveRoomAsync(_currentUserService.UserId.Value, id);
-
-        if (success)
-            return Ok(new { message = "Successfully left the room" });
-
-        return BadRequestWithError("Failed to leave room. You may be the creator or not a member.");
-    }
-
-    [HttpGet("novice")]
-    public async Task<IActionResult> GetNoviceRoom()
-    {
-        if (!_currentUserService.UserId.HasValue)
-            return Unauthorized();
-
-        var room = await _roomService.GetNoviceRoomAsync(_currentUserService.UserId.Value);
-
-        if (room == null)
-            return NotFound(new { error = "Novice room not found" });
-
-        return Ok(room);
-    }
-
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetRoom(Guid id)
-    {
-        var room = await _roomService.GetRoomByIdAsync(id, _currentUserService.UserId);
-        return OkOrNotFound(room, "Room not found");
-    }
-
-    private IActionResult OkOrNotFound<T>(T? result, string? message = null)
-    {
-        if (result == null)
+        try
         {
-            return NotFound(new { error = message ?? "Resource not found" });
-        }
-        return Ok(result);
-    }
-}
+            var success = await _roomService.LeaveRoomAsync(CurrentUserId!.Value, id);
 
-public class JoinRoomRequest
-{
-    public string? InviteCode { get; set; }
+            if (success)
+            {
+                return Ok(new
+                {
+                    message = "Successfully left the room",
+                    roomId = id
+                });
+            }
+
+            return BadRequestWithError("Failed to leave room");
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to leave room: {ex.Message}");
+        }
+    }
+
+    [HttpGet("{id}/users/count")]
+    public async Task<IActionResult> GetRoomUsersCount(Guid id)
+    {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
+        try
+        {
+            var room = await _roomService.GetRoomByIdAsync(id);
+            if (room == null)
+                return NotFound(new { error = "Room not found" });
+
+            return Ok(new
+            {
+                roomId = id,
+                currentUsers = room.CurrentUsersCount,
+                maxUsers = room.MaxUsers,
+                hasSpace = room.HasAvailableSpace
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to get room users count: {ex.Message}");
+        }
+    }
 }

@@ -1,4 +1,5 @@
 ﻿using Hubbly.Mobile.Services;
+using Hubbly.Mobile.Utils;
 using Hubbly.Mobile.Views;
 using Microsoft.Extensions.Logging;
 using Refit;
@@ -26,26 +27,19 @@ public static class MauiProgram
         var baseUrl = GetBaseUrl();
         Console.WriteLine($"Using base URL: {baseUrl}");
 
-        // Основной HTTP клиент
+        // Основной HTTP клиент с обработчиком авторизации
         builder.Services.AddSingleton(sp => new HttpClient
         {
             BaseAddress = new Uri(baseUrl),
             Timeout = TimeSpan.FromSeconds(30)
         });
 
+        // Сервисы хранилища
         builder.Services.AddSingleton<ITokenStorage, SecureStorageTokenService>();
         builder.Services.AddTransient<AuthenticatedHttpClientHandler>();
 
-        // API сервисы через Refit с авторизацией
-        builder.Services.AddRefitClient<IAuthApiService>()
-            .ConfigureHttpClient((sp, client) =>
-            {
-                client.BaseAddress = new Uri(baseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
-
-        // IChatApiService с добавлением токена
-        builder.Services.AddRefitClient<IChatApiService>()
+        // Регистрация API сервисов через Refit
+        builder.Services.AddRefitClient<IUsersApiService>()
             .ConfigureHttpClient((sp, client) =>
             {
                 client.BaseAddress = new Uri(baseUrl);
@@ -53,25 +47,54 @@ public static class MauiProgram
             })
             .AddHttpMessageHandler<AuthenticatedHttpClientHandler>();
 
-        // Добавим сервис для работы с API
+        builder.Services.AddRefitClient<IRoomsApiService>()
+            .ConfigureHttpClient((sp, client) =>
+            {
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddHttpMessageHandler<AuthenticatedHttpClientHandler>();
+
+        builder.Services.AddRefitClient<IMessagesApiService>()
+            .ConfigureHttpClient((sp, client) =>
+            {
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .AddHttpMessageHandler<AuthenticatedHttpClientHandler>();
+
+        // Основной сервис
         builder.Services.AddSingleton<IApiService, ApiService>();
 
-        builder.Services.AddSingleton<INavigationService, NavigationService>();
+        // SignalR сервис
+        builder.Services.AddSingleton<IChatHubService, ChatHubService>();
+
+        // Сервисы приложения
         builder.Services.AddSingleton<IUserStateService, UserStateService>();
+        builder.Services.AddSingleton<INavigationService, NavigationService>();
 
         // Страницы
-        builder.Services.AddTransient<MainPage>();
-        builder.Services.AddTransient<LoginPage>();
-        builder.Services.AddTransient<VerifyOtpPage>();
-        builder.Services.AddTransient<RoomsPage>();
+        builder.Services.AddTransient<WelcomePage>();
         builder.Services.AddTransient<ChatRoomPage>();
+        builder.Services.AddTransient<RoomsPage>();
+        builder.Services.AddTransient<ProfilePage>();
 
         return builder.Build();
     }
 
     private static string GetBaseUrl()
     {
-        // ВСЕГДА используем ваш IP
+#if DEBUG
+        // Для отладки используем IP компьютера
+        return GetDebugBaseUrl();
+#else
+    // Для продакшена
+    return "https://ваш-сервер.com";
+#endif
+    }
+
+    private static string GetDebugBaseUrl()
+    {
         return "http://192.168.1.203:5081";
     }
 }

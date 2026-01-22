@@ -1,4 +1,6 @@
-﻿using Hubbly.Infrastructure.Data;
+﻿using Hubbly.Domain.Interfaces;
+using Hubbly.Infrastructure.Data;
+using Hubbly.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,12 +19,20 @@ public static class DependencyInjection
                 configuration.GetConnectionString("DefaultConnection"),
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
-        // Redis (пока закомментируем, подключим позже)
-        // services.AddStackExchangeRedisCache(options =>
-        // {
-        //     options.Configuration = configuration.GetConnectionString("Redis");
-        //     options.InstanceName = "Hubbly_";
-        // });
+        // Register DbContext as interface
+        services.AddScoped<IApplicationDbContext>(provider =>
+            provider.GetRequiredService<ApplicationDbContext>());
+
+        // Cache (Redis)
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = configuration.GetConnectionString("Redis");
+            options.InstanceName = "Hubbly_";
+        });
+
+        // Services
+        services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<ICacheService, RedisCacheService>();
 
         return services;
     }

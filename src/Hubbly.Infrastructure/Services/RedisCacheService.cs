@@ -7,19 +7,23 @@ namespace Hubbly.Infrastructure.Services;
 public class RedisCacheService : ICacheService
 {
     private readonly IDistributedCache _cache;
+    private readonly JsonSerializerOptions _jsonOptions;
 
     public RedisCacheService(IDistributedCache cache)
     {
         _cache = cache;
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
     }
 
     public async Task<T?> GetAsync<T>(string key)
     {
         var cachedData = await _cache.GetStringAsync(key);
-        if (string.IsNullOrEmpty(cachedData))
-            return default;
-
-        return JsonSerializer.Deserialize<T>(cachedData);
+        return string.IsNullOrEmpty(cachedData)
+            ? default
+            : JsonSerializer.Deserialize<T>(cachedData, _jsonOptions);
     }
 
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
@@ -35,7 +39,7 @@ public class RedisCacheService : ICacheService
             options.SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
         }
 
-        var serializedData = JsonSerializer.Serialize(value);
+        var serializedData = JsonSerializer.Serialize(value, _jsonOptions);
         await _cache.SetStringAsync(key, serializedData, options);
     }
 

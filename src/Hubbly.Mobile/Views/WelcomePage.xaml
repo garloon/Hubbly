@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Hubbly.Mobile.Views.WelcomePage"
+             Title="Добро пожаловать!">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <VerticalStackLayout Spacing="25" Padding="30,60,30,30">
+
+                <!-- Заголовок -->
+                <VerticalStackLayout Spacing="10" HorizontalOptions="Center">
+                    <Label Text="👋" 
+                           FontSize="48"
+                           HorizontalOptions="Center" />
+
+                    <Label Text="Hubbly Chat" 
+                           FontSize="32"
+                           FontAttributes="Bold"
+                           TextColor="#512BD4"
+                           HorizontalOptions="Center" />
+
+                    <Label Text="Быстрый и простой чат" 
+                           FontSize="16"
+                           TextColor="Gray"
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+
+                <!-- Форма входа -->
+                <Frame Padding="20" CornerRadius="15" BackgroundColor="White" HasShadow="True">
+                    <VerticalStackLayout Spacing="15">
+
+                        <Label Text="Придумайте имя для чата" 
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <!-- Никнейм -->
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Ваше имя" 
+                                   FontSize="14"
+                                   TextColor="Gray" />
+
+                            <Entry x:Name="NicknameEntry"
+                                   Placeholder="Например: Alex"
+                                   TextChanged="OnNicknameChanged"
+                                   MaxLength="20"
+                                   FontSize="16"
+                                   TextColor="Gray" />
+
+                            <Label x:Name="NicknameErrorLabel"
+                                   Text=""
+                                   TextColor="Red"
+                                   FontSize="12"
+                                   IsVisible="False" />
+                        </VerticalStackLayout>
+
+                        <!-- Информация -->
+                        <Frame Padding="15" 
+                               CornerRadius="10" 
+                               BackgroundColor="#F0F8FF"
+                               BorderColor="#E3F2FD">
+                            <VerticalStackLayout Spacing="5">
+                                <Label Text="ℹ️ Как это работает?" 
+                                       FontSize="14"
+                                       FontAttributes="Bold"
+                                       TextColor="#1976D2" />
+
+                                <Label Text="• Вы войдете как гость" 
+                                       FontSize="13"
+                                       TextColor="#424242" />
+
+                                <Label Text="• Можно привязать email позже" 
+                                       FontSize="13"
+                                       TextColor="#424242" />
+
+                                <Label Text="• Ваши данные хранятся на устройстве" 
+                                       FontSize="13"
+                                       TextColor="#424242" />
+                            </VerticalStackLayout>
+                        </Frame>
+
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Кнопки -->
+                <VerticalStackLayout Spacing="15">
+                    <Button x:Name="ContinueButton"
+                            Text="Продолжить как гость"
+                            Clicked="OnContinueClicked"
+                            BackgroundColor="#512BD4"
+                            TextColor="White"
+                            FontSize="16"
+                            FontAttributes="Bold"
+                            CornerRadius="10"
+                            HeightRequest="55"
+                            IsEnabled="False" />
+
+                    <Button Text="Уже есть аккаунт?"
+                            Clicked="OnExistingAccountClicked"
+                            BackgroundColor="Transparent"
+                            TextColor="#512BD4"
+                            FontSize="14" />
+
+                    <Button Text="🪲 Отладка"
+                            Clicked="OnDebugClicked"
+                            BackgroundColor="Orange"
+                            TextColor="White"
+                            Margin="0,20,0,0"
+                            HeightRequest="40" />
+                </VerticalStackLayout>
+
+                <!-- Индикатор загрузки -->
+                <ActivityIndicator x:Name="LoadingIndicator"
+                                   IsRunning="False"
+                                   Color="#512BD4"
+                                   IsVisible="False"
+                                   HorizontalOptions="Center" />
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </ContentPage.Content>
+
+</ContentPage>

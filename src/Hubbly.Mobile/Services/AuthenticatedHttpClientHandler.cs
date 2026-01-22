@@ -15,13 +15,18 @@ public class AuthenticatedHttpClientHandler : DelegatingHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        // Получаем токен из хранилища
-        var token = await _tokenStorage.GetTokenAsync();
-
-        // Добавляем Bearer токен в заголовок Authorization
-        if (!string.IsNullOrEmpty(token))
+        // Добавляем UserId в заголовок если есть
+        var userId = await _tokenStorage.GetUserIdAsync();
+        if (userId.HasValue)
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Add("X-User-Id", userId.Value.ToString());
+        }
+
+        // Добавляем DeviceId если есть
+        var deviceId = await _tokenStorage.GetDeviceIdAsync();
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            request.Headers.Add("X-Device-Id", deviceId);
         }
 
         return await base.SendAsync(request, cancellationToken);

@@ -1,24 +1,18 @@
-﻿using Hubbly.Domain.Dtos.Messages;
+﻿using Hubbly.Domain.DTOs;
 
 namespace Hubbly.Domain.Interfaces;
 
 public interface IChatService
 {
-    // Основные операции с сообщениями
+    // Отправить сообщение (только live, без сохранения в историю при входе)
     Task<MessageDto> SendMessageAsync(Guid userId, Guid roomId, string text);
-    Task<MessageDto> SendMessageAsync(Guid userId, Guid roomId, SendMessageDto dto);
-    Task<EditMessageResult> EditMessageAsync(Guid userId, Guid messageId, string newText);
-    Task<DeleteMessageResult> DeleteMessageAsync(Guid userId, Guid messageId);
 
-    // Получение сообщений
-    Task<IEnumerable<MessageDto>> GetRoomMessagesAsync(Guid roomId, Guid userId, int page = 1, int pageSize = 50);
-    Task<MessageDto?> GetMessageByIdAsync(Guid messageId, Guid userId);
+    // Получить историю сообщений (только по запросу пользователя)
+    Task<List<MessageDto>> GetRoomHistoryAsync(Guid roomId, int limit = 50);
 
-    // Управление комнатами
-    Task<bool> JoinRoomAsync(Guid userId, Guid roomId);
-    Task<bool> LeaveRoomAsync(Guid userId, Guid roomId);
+    // Удалить сообщение (модерация)
+    Task<bool> DeleteMessageAsync(Guid messageId, string? reason = null);
 
-    // Статистика
-    Task<int> GetUnreadCountAsync(Guid userId, Guid roomId);
-    Task MarkAsReadAsync(Guid userId, Guid roomId, Guid messageId);
+    // Получить последние N сообщений комнаты
+    Task<List<MessageDto>> GetRecentMessagesAsync(Guid roomId, int count = 20);
 }
