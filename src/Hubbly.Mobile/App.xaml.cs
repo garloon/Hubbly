@@ -2,12 +2,13 @@
 
 namespace Hubbly.Mobile;
 
-public partial class App : IApplication
+public partial class App : Microsoft.Maui.Controls.Application
 {
     public App()
     {
         InitializeComponent();
 
-        MainPage = new NavigationPage(new MainPage());
+        // Стартовая страница
+        MainPage = new NavigationPage(new WelcomePage());
     }
 }

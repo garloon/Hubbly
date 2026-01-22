@@ -2,36 +2,26 @@
 
 public interface ITokenStorage
 {
-    Task<string?> GetTokenAsync();
-    Task SaveTokenAsync(string token);
-    Task DeleteTokenAsync();
+    // Токены (пока не используем JWT)
+    Task<string?> GetAuthTokenAsync();
+    Task SaveAuthTokenAsync(string token);
+    Task DeleteAuthTokenAsync();
+
+    // User ID
+    Task<Guid?> GetUserIdAsync();
+    Task SaveUserIdAsync(Guid userId);
+    Task DeleteUserIdAsync();
+
+    // Device ID
+    Task<string?> GetDeviceIdAsync();
+    Task SaveDeviceIdAsync(string deviceId);
+    Task DeleteDeviceIdAsync();
+
+    // Последняя комната
+    Task<Guid?> GetLastRoomIdAsync();
+    Task SaveLastRoomIdAsync(Guid roomId);
+    Task ClearLastRoomIdAsync();
+
+    // Проверка аутентификации
     Task<bool> IsAuthenticatedAsync();
-}
-
-public class SecureStorageTokenService : ITokenStorage
-{
-    private const string TokenKey = "auth_token";
-
-
-    public async Task<string?> GetTokenAsync()
-    {
-        return await SecureStorage.Default.GetAsync(TokenKey);
-    }
-
-    public async Task SaveTokenAsync(string token)
-    {
-        await SecureStorage.Default.SetAsync(TokenKey, token);
-    }
-
-    public async Task DeleteTokenAsync()
-    {
-        SecureStorage.Default.Remove(TokenKey);
-        await Task.CompletedTask;
-    }
-
-    public async Task<bool> IsAuthenticatedAsync()
-    {
-        var token = await GetTokenAsync();
-        return !string.IsNullOrEmpty(token);
-    }
 }

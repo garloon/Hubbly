@@ -1,36 +1,48 @@
-﻿using Hubbly.Domain.Dtos.Messages;
-using Hubbly.Domain.Interfaces;
-using Microsoft.AspNetCore.Authorization;
+﻿using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Hubbly.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
+[Route("api/messages")]
 public class MessagesController : BaseApiController
 {
     private readonly IChatService _chatService;
+    private readonly IRoomService _roomService;
 
-    public MessagesController(IChatService chatService)
+    public MessagesController(
+        IChatService chatService,
+        IRoomService roomService)
     {
         _chatService = chatService;
+        _roomService = roomService;
     }
 
     [HttpGet("room/{roomId}")]
     public async Task<IActionResult> GetRoomMessages(
         Guid roomId,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50)
+        [FromQuery] int limit = 50)
     {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
         try
         {
-            var messages = await _chatService.GetRoomMessagesAsync(roomId, CurrentUserId, page, pageSize);
-            return Ok(messages);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
+            // Проверяем что пользователь в комнате
+            var isInRoom = await _roomService.IsUserInRoomAsync(CurrentUserId!.Value, roomId);
+            if (!isInRoom)
+                return Unauthorized(new { error = "User is not in room" });
+
+            // Получаем историю (только по запросу)
+            var messages = await _chatService.GetRoomHistoryAsync(roomId, limit);
+
+            return Ok(new
+            {
+                roomId,
+                messages,
+                count = messages.Count,
+                timestamp = DateTime.UtcNow
+            });
         }
         catch (Exception ex)
         {
@@ -38,111 +50,108 @@ public class MessagesController : BaseApiController
         }
     }
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetMessage(Guid id)
-    {
-        try
-        {
-            var message = await _chatService.GetMessageByIdAsync(id, CurrentUserId);
-            return OkOrNotFound(message, "Message not found");
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
-        catch (Exception ex)
-        {
-            return BadRequestWithError($"Failed to get message: {ex.Message}");
-        }
-    }
-
     [HttpPost("room/{roomId}")]
-    public async Task<IActionResult> SendMessage(Guid roomId, [FromBody] SendMessageDto dto)
+    public async Task<IActionResult> SendMessage(
+        Guid roomId,
+        [FromBody] SendMessageRequest request)
     {
-        Console.WriteLine($"=== SendMessage called ===");
-        Console.WriteLine($"RoomId: {roomId}");
-        Console.WriteLine($"Text: {dto.Text}");
-
-        if (string.IsNullOrWhiteSpace(dto.Text))
-            return BadRequest(new { error = "Message text is required" });
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
 
         try
         {
-            var message = await _chatService.SendMessageAsync(CurrentUserId, roomId, dto);
+            if (string.IsNullOrWhiteSpace(request.Text))
+                return BadRequestWithError("Message text is required");
 
-            // ЛОГИРУЕМ ОТВЕТ
-            var response = new
+            // Проверяем что пользователь в комнате
+            var isInRoom = await _roomService.IsUserInRoomAsync(CurrentUserId!.Value, roomId);
+            if (!isInRoom)
             {
-                message.Id,
-                message.Text,
-                message.SenderId,
-                message.RoomId,
-                message.Type,
-                message.CreatedAt
-            };
+                // Пытаемся добавить
+                var joined = await _roomService.JoinRoomAsync(CurrentUserId!.Value, roomId);
+                if (!joined)
+                    return BadRequestWithError("Cannot send message: not in room and cannot join");
+            }
 
-            Console.WriteLine($"Sending response: {System.Text.Json.JsonSerializer.Serialize(response)}");
+            var message = await _chatService.SendMessageAsync(
+                CurrentUserId!.Value,
+                roomId,
+                request.Text);
 
-            return Ok(message);
+            return Ok(new
+            {
+                message,
+                success = true
+            });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Rate limit"))
         {
-            return Forbid(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = $"Failed to send message: {ex.Message}" });
-        }
-    }
-
-    [HttpPut("{id}")]
-    public async Task<IActionResult> EditMessage(Guid id, [FromBody] EditMessageDto dto)
-    {
-        if (string.IsNullOrWhiteSpace(dto.Text))
-            return BadRequestWithError("Message text is required");
-
-        try
-        {
-            var success = await _chatService.EditMessageAsync(CurrentUserId, id, dto.Text);
-
-            if (success.Success)
-                return Ok(new { message = "Message updated successfully" });
-
-            return NotFound(new { error = "Message not found or cannot be edited" });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequestWithError(ex.Message);
+            return StatusCode(429, new { error = ex.Message });
         }
         catch (Exception ex)
         {
-            return BadRequestWithError($"Failed to edit message: {ex.Message}");
+            return BadRequestWithError($"Failed to send message: {ex.Message}");
         }
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteMessage(Guid id)
+    [HttpDelete("{messageId}")]
+    public async Task<IActionResult> DeleteMessage(
+        Guid messageId,
+        [FromQuery] string? reason = null)
     {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
         try
         {
-            var success = await _chatService.DeleteMessageAsync(CurrentUserId, id);
+            // TODO: Проверять права (админ или создатель сообщения)
+            var success = await _chatService.DeleteMessageAsync(messageId, reason);
 
-            if (success.Success)
+            if (success)
                 return Ok(new { message = "Message deleted successfully" });
 
-            return NotFound(new { error = "Message not found" });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Forbid(ex.Message);
+            return NotFound(new { error = "Message not found or already deleted" });
         }
         catch (Exception ex)
         {
             return BadRequestWithError($"Failed to delete message: {ex.Message}");
         }
     }
+
+    [HttpGet("room/{roomId}/recent")]
+    public async Task<IActionResult> GetRecentMessages(
+        Guid roomId,
+        [FromQuery] int count = 20)
+    {
+        var requireUser = RequireUser();
+        if (requireUser != null) return requireUser;
+
+        try
+        {
+            // Проверяем что пользователь в комнате
+            var isInRoom = await _roomService.IsUserInRoomAsync(CurrentUserId!.Value, roomId);
+            if (!isInRoom)
+                return Unauthorized(new { error = "User is not in room" });
+
+            var messages = await _chatService.GetRecentMessagesAsync(roomId, count);
+
+            return Ok(new
+            {
+                roomId,
+                messages,
+                count = messages.Count,
+                isLive = true
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequestWithError($"Failed to get recent messages: {ex.Message}");
+        }
+    }
+}
+
+// DTO для отправки сообщения
+public class SendMessageRequest
+{
+    public string Text { get; set; } = string.Empty;
 }

@@ -3,5 +3,5 @@
 public interface IEmailService
 {
     Task SendEmailAsync(string email, string subject, string message);
-    Task SendOtpEmailAsync(string email, string otpCode);
+    Task SendWelcomeEmailAsync(string email, string nickname);
 }

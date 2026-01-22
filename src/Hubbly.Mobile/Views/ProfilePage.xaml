@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Hubbly.Mobile.Views.ProfilePage"
+             Title="Профиль">
+
+    <ContentPage.Content>
+        <VerticalStackLayout Padding="20" Spacing="20">
+            <Label Text="Профиль пользователя"
+                   FontSize="24"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+
+            <Label Text="Эта страница в разработке"
+                   FontSize="16"
+                   TextColor="Gray"
+                   HorizontalOptions="Center" />
+
+            <Button Text="Назад"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="#512BD4"
+                    TextColor="White" />
+        </VerticalStackLayout>
+    </ContentPage.Content>
+
+</ContentPage>

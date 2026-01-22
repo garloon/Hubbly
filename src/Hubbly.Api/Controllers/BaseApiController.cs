@@ -1,19 +1,26 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Hubbly.Domain.DTOs;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Hubbly.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public abstract class BaseApiController : ControllerBase
 {
-    protected Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? Guid.Empty.ToString());
+    protected Guid? CurrentUserId =>
+        HttpContext.Items["CurrentUserId"] as Guid?;
 
-    protected string CurrentUserEmail =>
-        User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
+    protected UserDto? CurrentUser =>
+        HttpContext.Items["CurrentUser"] as UserDto;
+
+    protected IActionResult RequireUser()
+    {
+        if (!CurrentUserId.HasValue || CurrentUser == null)
+        {
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+        return null;
+    }
 
     protected IActionResult OkOrNotFound<T>(T? result, string? message = null)
     {
@@ -27,5 +34,24 @@ public abstract class BaseApiController : ControllerBase
     protected IActionResult BadRequestWithError(string error)
     {
         return BadRequest(new { error });
+    }
+
+    protected IActionResult ApiSuccess<T>(T data, string message = null)
+    {
+        return Ok(new
+        {
+            success = true,
+            data = data,
+            message = message
+        });
+    }
+
+    protected IActionResult ApiError(string error, int statusCode = 400)
+    {
+        return StatusCode(statusCode, new
+        {
+            success = false,
+            error = error
+        });
     }
 }

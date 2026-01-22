@@ -1,30 +1,34 @@
 ﻿namespace Hubbly.Mobile.Models;
 
-public class LoginRequest
+public class CreateGuestRequest
 {
-    public string Email { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public string Nickname { get; set; } = string.Empty;
 }
 
-public class VerifyOtpRequest
+public class UpdateNicknameRequest
 {
-    public string Email { get; set; } = string.Empty;
-    public string OtpCode { get; set; } = string.Empty;
+    public string NewNickname { get; set; } = string.Empty;
 }
 
-public class AuthResponse
+public class UserDto
 {
-    public string Token { get; set; } = string.Empty;
-    public UserDto User { get; set; } = new();
+    public Guid Id { get; set; }
+    public string Nickname { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public bool IsGuest => string.IsNullOrEmpty(Email);
+    public string? Email { get; set; }
+    public Guid? LastRoomId { get; set; }
 }
 
-public class SimpleResponse
-{
-    public string? Message { get; set; }
-}
-
-public class AuthResult
+public class ApiResponse<T>
 {
     public bool Success { get; set; }
-    public UserDto? User { get; set; }
+    public T? Data { get; set; }
     public string? Error { get; set; }
+
+    public override string ToString()
+    {
+        return $"Success: {Success}, Error: {Error}";
+    }
 }

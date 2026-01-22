@@ -6,8 +6,7 @@ namespace Hubbly.Domain.Interfaces;
 public interface IApplicationDbContext
 {
     DbSet<User> Users { get; }
-    DbSet<ChatRoom> ChatRooms { get; }
-    DbSet<RoomMember> RoomMembers { get; }
+    DbSet<Room> Rooms { get; }
     DbSet<Message> Messages { get; }
 
     // Для LINQ запросов

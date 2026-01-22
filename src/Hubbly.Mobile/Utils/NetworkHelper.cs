@@ -1,49 +1,42 @@
-﻿namespace Hubbly.Mobile.Utils;
+﻿using System.Net.NetworkInformation;
+using System.Net.Sockets;
+
+namespace Hubbly.Mobile.Utils;
 
 public static class NetworkHelper
 {
-    public static async Task<string> GetLocalIpAddress()
+    public static string GetLocalIpAddress()
     {
-        try
+        var ipAddresses = new List<string>();
+
+        // Получаем все сетевые интерфейсы
+        foreach (var netInterface in NetworkInterface.GetAllNetworkInterfaces())
         {
-            // Для Android можно попробовать получить IP
-            if (DeviceInfo.Platform == DevicePlatform.Android)
+            // Пропускаем выключенные интерфейсы
+            if (netInterface.OperationalStatus != OperationalStatus.Up)
+                continue;
+
+            // Получаем IP-адреса интерфейса
+            var ipProperties = netInterface.GetIPProperties();
+
+            foreach (var ipAddress in ipProperties.UnicastAddresses)
             {
-                // Простой способ - запросить у пользователя
-                return await GetIpFromUser();
+                // Берем только IPv4 адреса
+                if (ipAddress.Address.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    var ip = ipAddress.Address.ToString();
+
+                    // Игнорируем локальные адреса
+                    if (!ip.StartsWith("127.") &&
+                        !ip.StartsWith("169.254.") &&
+                        !ip.StartsWith("192.0.0."))
+                    {
+                        ipAddresses.Add(ip);
+                    }
+                }
             }
-
-            return "192.168.1.100"; // Дефолтный IP
         }
-        catch
-        {
-            return "192.168.1.100";
-        }
-    }
 
-    private static async Task<string> GetIpFromUser()
-    {
-        // Можно сделать диалог для ввода IP
-        // Пока просто возвращаем дефолтный
-        return "192.168.1.100";
-    }
-
-    public static async Task<bool> TestConnection(string ip)
-    {
-        try
-        {
-            using var client = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(3),
-                BaseAddress = new Uri($"http://{ip}:5081")
-            };
-
-            var response = await client.GetAsync("/health");
-            return response.IsSuccessStatusCode;
-        }
-        catch
-        {
-            return false;
-        }
+        return ipAddresses.FirstOrDefault() ?? "localhost";
     }
 }

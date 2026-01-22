@@ -1,29 +1,29 @@
-﻿using Hubbly.Domain.Dtos.Rooms;
+﻿using Hubbly.Domain.DTOs;
 
 namespace Hubbly.Domain.Interfaces;
 
 public interface IRoomService
 {
-    // Основные операции
-    Task<RoomDto> CreateRoomAsync(Guid userId, CreateRoomDto request);
-    Task<RoomDto?> GetRoomByIdAsync(Guid roomId, Guid? userId = null);
-    Task<RoomDetailsDto?> GetRoomDetailsAsync(Guid roomId, Guid userId);
-    Task<IEnumerable<RoomDto>> GetPublicRoomsAsync(Guid userId, int page = 1, int pageSize = 20);
-    Task<IEnumerable<RoomDto>> GetUserRoomsAsync(Guid userId);
-    Task<RoomDto> UpdateRoomAsync(Guid roomId, Guid userId, UpdateRoomDto request);
-    Task<bool> DeleteRoomAsync(Guid roomId, Guid userId);
-    Task<RoomDto?> GetNoviceRoomAsync(Guid userId);
+    // Найти или создать системную комнату со свободным местом
+    Task<RoomDto> GetOrCreateAvailableSystemRoomAsync();
 
-    // Управление участниками
-    Task<bool> JoinRoomAsync(Guid userId, Guid roomId, string? inviteCode = null);
+    // Получить комнату по ID
+    Task<RoomDto?> GetRoomByIdAsync(Guid roomId);
+
+    // Список всех комнат
+    Task<List<RoomDto>> GetAllRoomsAsync();
+
+    // Присоединить пользователя к комнате
+    Task<bool> JoinRoomAsync(Guid userId, Guid roomId);
+
+    // Покинуть комнату
     Task<bool> LeaveRoomAsync(Guid userId, Guid roomId);
-    Task<bool> KickUserAsync(Guid roomId, Guid adminUserId, Guid targetUserId);
-    Task<bool> ToggleAdminAsync(Guid roomId, Guid adminUserId, Guid targetUserId, bool makeAdmin);
 
-    // Приглашения
-    Task<string> GenerateInviteCodeAsync(Guid roomId, Guid userId, TimeSpan? expiry = null);
-    Task<bool> ValidateInviteCodeAsync(Guid roomId, string inviteCode);
+    // Обновить счетчик пользователей
+    Task UpdateUsersCountAsync(Guid roomId);
 
-    // Поиск
-    Task<IEnumerable<RoomDto>> SearchRoomsAsync(string query, Guid userId, int limit = 20);
+    // Проверить, находится ли пользователь в комнате
+    Task<bool> IsUserInRoomAsync(Guid userId, Guid roomId);
+
+    Task SyncAllRoomsCountAsync();
 }

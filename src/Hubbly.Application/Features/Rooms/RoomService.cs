@@ -1,330 +1,168 @@
-﻿using Hubbly.Domain.Entities;
+﻿using Hubbly.Domain.DTOs;
+using Hubbly.Domain.Entities;
 using Hubbly.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 using Hubbly.Domain.Interfaces;
-using Hubbly.Domain.Dtos.Rooms;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Hubbly.Application.Features.Rooms;
 
 public class RoomService : IRoomService
 {
     private readonly IApplicationDbContext _context;
-    private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<RoomService> _logger;
+    private readonly OnlineUsersService _onlineUsersService;
 
     public RoomService(
         IApplicationDbContext context,
-        ICurrentUserService currentUserService)
+        ILogger<RoomService> logger,
+        OnlineUsersService onlineUsersService)
     {
         _context = context;
-        _currentUserService = currentUserService;
+        _logger = logger;
+        _onlineUsersService = onlineUsersService;
     }
 
-    public async Task<RoomDto> CreateRoomAsync(Guid userId, CreateRoomDto request)
+    public async Task<bool> JoinRoomAsync(Guid userId, Guid roomId)
     {
-        var user = await _context.Users.FindAsync(userId);
-        if (user == null)
-            throw new Exception("User not found");
-
-        var room = new ChatRoom
-        {
-            Title = request.Title,
-            Description = request.Description,
-            Type = request.Type,
-            CreatorId = userId,
-            MaxMembers = request.MaxMembers
-        };
-
-        // Для приватных комнат генерируем инвайт-код
-        if (request.Type == RoomType.Private)
-        {
-            room.InviteCode = GenerateInviteCode();
-            room.InviteCodeExpires = DateTime.UtcNow.AddDays(7);
-        }
-
-        _context.ChatRooms.Add(room);
-        await _context.SaveChangesAsync();
-
-        // Автоматически добавляем создателя как участника и админа
-        var roomMember = new RoomMember
-        {
-            UserId = userId,
-            RoomId = room.Id,
-            IsAdmin = true
-        };
-
-        _context.RoomMembers.Add(roomMember);
-        await _context.SaveChangesAsync();
-
-        return await MapToRoomDtoAsync(room, userId);
-    }
-
-    public async Task<RoomDto?> GetRoomByIdAsync(Guid roomId, Guid? userId = null)
-    {
-        var room = await _context.ChatRooms
-            .Include(r => r.Creator)
-            .FirstOrDefaultAsync(r => r.Id == roomId && !r.IsDeleted);
-
-        if (room == null) return null;
-
-        return await MapToRoomDtoAsync(room, userId);
-    }
-
-    public async Task<RoomDetailsDto?> GetRoomDetailsAsync(Guid roomId, Guid userId)
-    {
-        var room = await _context.ChatRooms
-            .Include(r => r.Creator)
-            .Include(r => r.Members)
-                .ThenInclude(m => m.User)
-            .FirstOrDefaultAsync(r => r.Id == roomId && !r.IsDeleted);
-
-        if (room == null) return null;
-
-        // Проверяем доступ (для приватных комнат)
-        if (room.Type == RoomType.Private)
-        {
-            var isMember = await _context.RoomMembers
-                .AnyAsync(rm => rm.RoomId == roomId && rm.UserId == userId && !rm.IsBanned);
-
-            if (!isMember && room.CreatorId != userId)
-                throw new UnauthorizedAccessException("Access denied to private room");
-        }
-
-        var dto = new RoomDetailsDto
-        {
-            Id = room.Id,
-            Title = room.Title,
-            Description = room.Description,
-            Type = room.Type,
-            CreatorId = room.CreatorId,
-            CreatorName = room.Creator.DisplayName,
-            CreatorAvatarUrl = room.Creator.AvatarUrl,
-            MaxMembers = room.MaxMembers,
-            CreatedAt = room.CreatedAt,
-            HasPassword = false, // Пока не реализовано
-            InviteCode = room.InviteCode,
-            InviteCodeExpires = room.InviteCodeExpires,
-            LastActivityAt = await GetLastActivityAsync(roomId)
-        };
-
-        // Заполняем участников
-        dto.Members = room.Members
-            .Where(m => !m.IsBanned)
-            .Select(m => new RoomMemberDto
-            {
-                UserId = m.UserId,
-                DisplayName = m.User.DisplayName,
-                AvatarUrl = m.User.AvatarUrl,
-                IsAdmin = m.IsAdmin,
-                IsCreator = m.UserId == room.CreatorId,
-                JoinedAt = m.JoinedAt
-            })
-            .OrderByDescending(m => m.IsCreator)
-            .ThenByDescending(m => m.IsAdmin)
-            .ThenBy(m => m.JoinedAt)
-            .ToList();
-
-        dto.MemberCount = dto.Members.Count;
-        dto.OnlineCount = dto.Members.Count; // TODO: Реализовать онлайн статус
-        dto.IsMember = dto.Members.Any(m => m.UserId == userId);
-        dto.IsAdmin = dto.Members.FirstOrDefault(m => m.UserId == userId)?.IsAdmin ?? false;
-
-        return dto;
-    }
-
-    public async Task<IEnumerable<RoomDto>> GetPublicRoomsAsync(Guid userId, int page = 1, int pageSize = 20)
-    {
-        var rooms = await _context.ChatRooms
-            .Include(r => r.Creator)
-            .Where(r => r.Type == RoomType.Public && !r.IsDeleted)
-            .OrderByDescending(r => r.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        var result = new List<RoomDto>();
-        foreach (var room in rooms)
-        {
-            result.Add(await MapToRoomDtoAsync(room, userId));
-        }
-
-        return result;
-    }
-
-    public async Task<IEnumerable<RoomDto>> GetUserRoomsAsync(Guid userId)
-    {
-        var roomIds = await _context.RoomMembers
-            .Where(rm => rm.UserId == userId && !rm.IsBanned)
-            .Select(rm => rm.RoomId)
-            .ToListAsync();
-
-        var rooms = await _context.ChatRooms
-            .Include(r => r.Creator)
-            .Where(r => roomIds.Contains(r.Id) && !r.IsDeleted)
-            .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync();
-
-        var result = new List<RoomDto>();
-        foreach (var room in rooms)
-        {
-            result.Add(await MapToRoomDtoAsync(room, userId));
-        }
-
-        return result;
-    }
-
-    public async Task<bool> JoinRoomAsync(Guid userId, Guid roomId, string? inviteCode = null)
-    {
-        var room = await _context.ChatRooms.FindAsync(roomId);
+        // 1. Проверяем существование комнаты
+        var room = await _context.Rooms.FindAsync(roomId);
         if (room == null || room.IsDeleted)
+        {
+            _logger.LogWarning("Room {RoomId} not found", roomId);
             return false;
-
-        // Проверяем ограничение по количеству участников
-        if (room.MaxMembers > 0)
-        {
-            var memberCount = await _context.RoomMembers
-                .CountAsync(rm => rm.RoomId == roomId && !rm.IsBanned);
-
-            if (memberCount >= room.MaxMembers)
-                return false;
         }
 
-        // Проверяем тип комнаты
-        if (room.Type == RoomType.Private)
+        // 2. Проверяем лимит через Redis
+        var onlineCount = await _onlineUsersService.GetOnlineCountAsync(roomId);
+        if (onlineCount >= room.MaxUsers)
         {
-            if (string.IsNullOrEmpty(inviteCode) || room.InviteCode != inviteCode)
-                return false;
-
-            // Проверяем срок действия инвайт-кода
-            if (room.InviteCodeExpires.HasValue && room.InviteCodeExpires < DateTime.UtcNow)
-                return false;
+            _logger.LogWarning("Room {RoomId} is full ({Current}/{Max})",
+                roomId, onlineCount, room.MaxUsers);
+            return false;
         }
 
-        // Проверяем, не забанен ли пользователь
-        var existingMember = await _context.RoomMembers
-            .FirstOrDefaultAsync(rm => rm.RoomId == roomId && rm.UserId == userId);
-
-        if (existingMember != null)
+        // 3. Проверяем, может пользователь уже онлайн
+        var isAlreadyOnline = await _onlineUsersService.IsUserOnlineAsync(roomId, userId);
+        if (isAlreadyOnline)
         {
-            if (existingMember.IsBanned)
-                return false;
-
-            // Уже участник
+            _logger.LogDebug("User {UserId} already online in room {RoomId}", userId, roomId);
             return true;
         }
 
-        // Добавляем как участника
-        var roomMember = new RoomMember
+        // 4. Обновляем last_room_id у пользователя
+        var user = await _context.Users.FindAsync(userId);
+        if (user != null)
         {
-            UserId = userId,
-            RoomId = roomId,
-            IsAdmin = false
-        };
+            user.LastRoomId = roomId;
+            await _context.SaveChangesAsync();
+        }
 
-        _context.RoomMembers.Add(roomMember);
-        await _context.SaveChangesAsync();
+        _logger.LogInformation("User {UserId} joined room {RoomId} (online: {OnlineCount}/{Max})",
+            userId, roomId, onlineCount + 1, room.MaxUsers);
 
         return true;
     }
 
     public async Task<bool> LeaveRoomAsync(Guid userId, Guid roomId)
     {
-        var roomMember = await _context.RoomMembers
-            .FirstOrDefaultAsync(rm => rm.RoomId == roomId && rm.UserId == userId);
-
-        if (roomMember == null)
+        var room = await _context.Rooms.FindAsync(roomId);
+        if (room == null || room.IsDeleted)
             return false;
 
-        // Создатель не может покинуть комнату (должен удалить её)
-        var room = await _context.ChatRooms.FindAsync(roomId);
-        if (room?.CreatorId == userId)
-            return false;
-
-        _context.RoomMembers.Remove(roomMember);
-        await _context.SaveChangesAsync();
-
+        _logger.LogDebug("User {UserId} left room {RoomId}", userId, roomId);
         return true;
     }
 
-    public async Task<RoomDto?> GetNoviceRoomAsync(Guid userId)
+    public async Task<bool> IsUserInRoomAsync(Guid userId, Guid roomId)
     {
-        var room = await _context.ChatRooms
-            .Include(r => r.Creator)
-            .FirstOrDefaultAsync(r => r.Type == RoomType.SystemNovice && !r.IsDeleted);
+        // Используем Redis для проверки онлайн статуса
+        return await _onlineUsersService.IsUserOnlineAsync(roomId, userId);
+    }
+
+    public async Task<RoomDto?> GetRoomByIdAsync(Guid roomId)
+    {
+        var room = await _context.Rooms
+            .FirstOrDefaultAsync(r => r.Id == roomId && !r.IsDeleted);
 
         if (room == null)
             return null;
 
-        return await MapToRoomDtoAsync(room, userId);
+        // Получаем актуальный онлайн счетчик из Redis
+        var onlineCount = await _onlineUsersService.GetOnlineCountAsync(roomId);
+
+        var dto = MapToDto(room);
+        dto.CurrentUsersCount = onlineCount; // Используем актуальное значение из Redis
+
+        return dto;
     }
 
-    // Вспомогательные методы
-    private async Task<RoomDto> MapToRoomDtoAsync(ChatRoom room, Guid? userId = null)
+    public async Task<RoomDto> GetOrCreateAvailableSystemRoomAsync()
     {
-        var memberCount = await _context.Set<RoomMember>()
-            .CountAsync(rm => rm.RoomId == room.Id && !rm.IsBanned);
+        // Ищем системную комнату со свободным местом
+        var systemRooms = await _context.Rooms
+            .Where(r => r.Type == RoomType.System && !r.IsDeleted)
+            .ToListAsync();
 
-        var isMember = userId.HasValue && await _context.RoomMembers
-            .AnyAsync(rm => rm.RoomId == room.Id && rm.UserId == userId && !rm.IsBanned);
+        foreach (var room in systemRooms)
+        {
+            var onlineCount = await _onlineUsersService.GetOnlineCountAsync(room.Id);
+            if (onlineCount < room.MaxUsers)
+            {
+                var dto = MapToDto(room);
+                dto.CurrentUsersCount = onlineCount;
+                return dto;
+            }
+        }
 
-        var isAdmin = userId.HasValue && await _context.RoomMembers
-            .AnyAsync(rm => rm.RoomId == room.Id && rm.UserId == userId && rm.IsAdmin && !rm.IsBanned);
+        // Создаем новую комнату если все заполнены
+        var systemRoomsCount = systemRooms.Count;
+        var newRoom = new Room
+        {
+            Name = systemRoomsCount == 0 ? "Новички" : $"Новички {systemRoomsCount + 1}",
+            Description = "Добро пожаловать в Hubbly!",
+            Type = RoomType.System,
+            MaxUsers = 100,
+            CurrentUsersCount = 0
+        };
 
+        _context.Rooms.Add(newRoom);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Created new system room {RoomId}: {RoomName}",
+            newRoom.Id, newRoom.Name);
+
+        return MapToDto(newRoom);
+    }
+
+    // Вспомогательный метод
+    private static RoomDto MapToDto(Room room)
+    {
         return new RoomDto
         {
             Id = room.Id,
-            Title = room.Title,
+            Name = room.Name,
             Description = room.Description,
             Type = room.Type,
+            MaxUsers = room.MaxUsers,
+            CurrentUsersCount = room.CurrentUsersCount,
             CreatorId = room.CreatorId,
-            CreatorName = room.Creator?.DisplayName ?? "Unknown",
-            CreatorAvatarUrl = room.Creator?.AvatarUrl,
-            MemberCount = memberCount,
-            OnlineCount = memberCount, // TODO: Реализовать онлайн статус
-            MaxMembers = room.MaxMembers,
-            IsMember = isMember,
-            IsAdmin = isAdmin,
-            CreatedAt = room.CreatedAt,
-            LastActivityAt = await GetLastActivityAsync(room.Id)
+            CreatedAt = room.CreatedAt
         };
     }
 
-    private async Task<DateTime?> GetLastActivityAsync(Guid roomId)
+    public Task<List<RoomDto>> GetAllRoomsAsync()
     {
-        var lastMessage = await _context.Messages
-            .Where(m => m.RoomId == roomId && !m.IsDeleted)
-            .OrderByDescending(m => m.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        return lastMessage?.CreatedAt;
+        throw new NotImplementedException();
     }
 
-    private string GenerateInviteCode()
+    public Task UpdateUsersCountAsync(Guid roomId)
     {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Repeat(chars, 8)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+        throw new NotImplementedException();
     }
 
-    // Остальные методы интерфейса пока заглушки
-    public Task<RoomDto> UpdateRoomAsync(Guid roomId, Guid userId, UpdateRoomDto request)
-        => throw new NotImplementedException();
-
-    public Task<bool> DeleteRoomAsync(Guid roomId, Guid userId)
-        => throw new NotImplementedException();
-
-    public Task<bool> KickUserAsync(Guid roomId, Guid adminUserId, Guid targetUserId)
-        => throw new NotImplementedException();
-
-    public Task<bool> ToggleAdminAsync(Guid roomId, Guid adminUserId, Guid targetUserId, bool makeAdmin)
-        => throw new NotImplementedException();
-
-    public Task<string> GenerateInviteCodeAsync(Guid roomId, Guid userId, TimeSpan? expiry = null)
-        => throw new NotImplementedException();
-
-    public Task<bool> ValidateInviteCodeAsync(Guid roomId, string inviteCode)
-        => throw new NotImplementedException();
-
-    public Task<IEnumerable<RoomDto>> SearchRoomsAsync(string query, Guid userId, int limit = 20)
-        => throw new NotImplementedException();
+    public Task SyncAllRoomsCountAsync()
+    {
+        throw new NotImplementedException();
+    }
 }

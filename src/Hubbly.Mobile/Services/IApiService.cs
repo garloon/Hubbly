@@ -1,88 +1,58 @@
 ﻿using Hubbly.Mobile.Models;
+using Refit;
 
 namespace Hubbly.Mobile.Services;
 
-public interface IApiService
+public interface IUsersApiService
 {
-    Task<bool> IsAuthenticatedAsync();
-    Task<bool> LoginWithEmailAsync(string email);
-    Task<AuthResult> VerifyOtpAsync(string email, string otpCode);
+    [Post("/api/users/guest")]
+    Task<Models.ApiResponse<UserDto>> CreateGuestAsync([Body] CreateGuestRequest request);
+
+    [Get("/api/users/me")]
+    Task<UserDto> GetCurrentUserAsync();
+
+    [Put("/api/users/nickname")]
+    Task<Models.ApiResponse<UserDto>> UpdateNicknameAsync([Body] UpdateNicknameRequest request);
 }
 
-public class ApiService : IApiService
+public interface IRoomsApiService
 {
-    private readonly IAuthApiService _authApiService;
-    private readonly ITokenStorage _tokenStorage;
+    [Get("/api/rooms")]
+    Task<List<RoomDto>> GetAllRoomsAsync();
 
-    public ApiService(IAuthApiService authApiService, ITokenStorage tokenStorage)
-    {
-        _authApiService = authApiService;
-        _tokenStorage = tokenStorage;
-    }
+    [Get("/api/rooms/available-system")]
+    Task<RoomDto> GetAvailableSystemRoomAsync();
 
-    public async Task<bool> IsAuthenticatedAsync()
-    {
-        var token = await _tokenStorage.GetTokenAsync();
-        return !string.IsNullOrEmpty(token);
-    }
+    [Get("/api/rooms/{id}")]
+    Task<RoomDto> GetRoomByIdAsync(Guid id);
 
-    public async Task<bool> LoginWithEmailAsync(string email)
-    {
-        try
-        {
-            var response = await _authApiService.RequestLoginAsync(new LoginRequest { Email = email });
-            // Теперь response - это SimpleResponse, проверяем что он не null
-            return response != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    [Post("/api/rooms/{id}/join")]
+    Task<JoinRoomResponse> JoinRoomAsync(Guid id);
 
-    public async Task<AuthResult> VerifyOtpAsync(string email, string otpCode)
-    {
-        try
-        {
-            var response = await _authApiService.VerifyOtpAsync(new VerifyOtpRequest
-            {
-                Email = email,
-                OtpCode = otpCode
-            });
+    [Get("/api/rooms/{id}/users/count")]
+    Task<object> GetRoomUsersCountAsync(Guid id);
+}
 
-            // Теперь response - это AuthResponse напрямую
-            if (response != null && !string.IsNullOrEmpty(response.Token))
-            {
-                await _tokenStorage.SaveTokenAsync(response.Token);
-                return new AuthResult
-                {
-                    Success = true,
-                    User = response.User
-                };
-            }
+public interface IMessagesApiService
+{
+    [Get("/api/messages/room/{roomId}")]
+    Task<MessagesResponse> GetRoomMessagesAsync(Guid roomId, [Query] int limit = 50);
 
-            return new AuthResult
-            {
-                Success = false,
-                Error = "Неверный ответ от сервера"
-            };
-        }
-        catch (Refit.ApiException refitEx)
-        {
-            // Обработка ошибок HTTP (401, 400 и т.д.)
-            return new AuthResult
-            {
-                Success = false,
-                Error = $"Ошибка API: {refitEx.StatusCode}"
-            };
-        }
-        catch (Exception ex)
-        {
-            return new AuthResult
-            {
-                Success = false,
-                Error = ex.Message
-            };
-        }
-    }
+    [Post("/api/messages/room/{roomId}")]
+    Task<MessageDto> SendMessageAsync(Guid roomId, [Body] SendMessageRequest request);
+
+    [Get("/api/messages/room/{roomId}/recent")]
+    Task<MessagesResponse> GetRecentMessagesAsync(Guid roomId, [Query] int count = 20);
+}
+
+// Основной сервис для удобства
+public interface IApiService
+{
+    Task<UserDto?> GetOrCreateGuestAsync(string deviceId, string nickname);
+    Task<UserDto> GetCurrentUserAsync();
+    Task<bool> UpdateNicknameAsync(string newNickname);
+    Task<RoomDto> GetAvailableSystemRoomAsync();
+    Task<bool> JoinRoomAsync(Guid roomId);
+    Task<List<MessageDto>> GetRoomMessagesAsync(Guid roomId, int limit = 50);
+    Task<MessageDto> SendMessageAsync(Guid roomId, string text);
 }
