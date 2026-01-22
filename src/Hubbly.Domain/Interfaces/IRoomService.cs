@@ -12,6 +12,7 @@ public interface IRoomService
     Task<IEnumerable<RoomDto>> GetUserRoomsAsync(Guid userId);
     Task<RoomDto> UpdateRoomAsync(Guid roomId, Guid userId, UpdateRoomDto request);
     Task<bool> DeleteRoomAsync(Guid roomId, Guid userId);
+    Task<RoomDto?> GetNoviceRoomAsync(Guid userId);
 
     // Управление участниками
     Task<bool> JoinRoomAsync(Guid userId, Guid roomId, string? inviteCode = null);

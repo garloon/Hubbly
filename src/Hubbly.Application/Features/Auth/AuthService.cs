@@ -2,6 +2,7 @@
 using Hubbly.Domain.Entities;
 using Hubbly.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -17,6 +18,7 @@ public class AuthService : IAuthService
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
     private readonly ICacheService _cacheService;
+    private readonly IApplicationDbContext _context;
     private readonly ILogger<AuthService> _logger; // Добавили логгер
 
     public AuthService(
@@ -24,12 +26,14 @@ public class AuthService : IAuthService
         IEmailService emailService,
         IConfiguration configuration,
         ICacheService cacheService,
+        IApplicationDbContext context,
         ILogger<AuthService> logger) // Добавили в конструктор
     {
         _userManager = userManager;
         _emailService = emailService;
         _configuration = configuration;
         _cacheService = cacheService;
+        _context = context;
         _logger = logger;
     }
 
@@ -65,6 +69,8 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponseDto> VerifyOtpAsync(string email, string otpCode)
     {
+        bool isNewUser = false;
+
         try
         {
             _logger.LogInformation("VerifyOtpAsync called for email: {Email}, OTP: {OtpCode}", email, otpCode);
@@ -95,7 +101,6 @@ public class AuthService : IAuthService
 
             if (user == null)
             {
-                _logger.LogInformation("Creating new user for email: {Email}", email);
                 // Создаем нового пользователя
                 user = new User
                 {
@@ -108,8 +113,6 @@ public class AuthService : IAuthService
                 var result = await _userManager.CreateAsync(user);
                 if (!result.Succeeded)
                 {
-                    _logger.LogError("Failed to create user: {Errors}",
-                        string.Join(", ", result.Errors.Select(e => e.Description)));
                     return new AuthResponseDto
                     {
                         Success = false,
@@ -117,7 +120,10 @@ public class AuthService : IAuthService
                     };
                 }
 
-                _logger.LogInformation("New user created with ID: {UserId}", user.Id);
+                isNewUser = true;
+
+                // ✅ ДОБАВЛЯЕМ ПОЛЬЗОВАТЕЛЯ В КОМНАТУ ДЛЯ НОВИЧКОВ
+                await AddUserToNoviceRoom(user.Id);
             }
             else
             {
@@ -202,5 +208,46 @@ public class AuthService : IAuthService
         var username = email.Split('@')[0];
         var random = new Random();
         return $"{username}_{random.Next(1000, 9999)}";
+    }
+
+    private async Task AddUserToNoviceRoom(Guid userId)
+    {
+        try
+        {
+            // Находим системную комнату для новичков
+            var noviceRoom = await _context.ChatRooms
+                .FirstOrDefaultAsync(r => r.Type == Domain.Enums.RoomType.SystemNovice);
+
+            if (noviceRoom != null)
+            {
+                // Проверяем, не добавлен ли уже пользователь
+                var existingMember = await _context.RoomMembers
+                    .FirstOrDefaultAsync(rm => rm.RoomId == noviceRoom.Id && rm.UserId == userId);
+
+                if (existingMember == null)
+                {
+                    // Добавляем пользователя в комнату
+                    var roomMember = new RoomMember
+                    {
+                        UserId = userId,
+                        RoomId = noviceRoom.Id,
+                        IsAdmin = false
+                    };
+
+                    _context.RoomMembers.Add(roomMember);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("User {UserId} added to novice room {RoomId}", userId, noviceRoom.Id);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Novice room not found!");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding user to novice room");
+        }
     }
 }

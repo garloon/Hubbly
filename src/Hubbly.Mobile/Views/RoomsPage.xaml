@@ -27,37 +27,66 @@
                     HeightRequest="50" />
 
             <CollectionView x:Name="RoomsCollection"
-                            SelectionMode="Single"
-                            SelectionChanged="OnRoomSelected">
+                    SelectionMode="Single"
+                    SelectionChanged="OnRoomSelected">
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Frame Padding="15"
-                               Margin="10,5"
-                               CornerRadius="10"
-                               BackgroundColor="{Binding IsMember, Converter={StaticResource MemberToColorConverter}}">
+               Margin="10,5"
+               CornerRadius="10"
+               BackgroundColor="#f0f0f0"
+               HasShadow="True">
+
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer 
+                    Tapped="OnRoomTapped"
+                    CommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+
                             <VerticalStackLayout>
-                                <Label Text="{Binding Title}"
-                                       FontSize="18"
-                                       TextColor="Green"
-                                       FontAttributes="Bold" />
+                                <HorizontalStackLayout>
+                                    <Label Text="{Binding Title}"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="#512BD4" />
+
+                                    <!-- Индикатор если участник -->
+                                    <Label Text=" ✅"
+                           IsVisible="{Binding IsMember}"
+                           FontSize="16"
+                           TextColor="Green"
+                           VerticalOptions="Center" />
+                                </HorizontalStackLayout>
 
                                 <Label Text="{Binding Description}"
-                                       FontSize="14"
-                                       TextColor="Gray"
-                                       LineBreakMode="WordWrap" />
+                       FontSize="14"
+                       TextColor="Gray"
+                       LineBreakMode="WordWrap" />
 
-                                <HorizontalStackLayout>
-                                    <Label Text="👥 "
-                                           FontSize="14" />
+                                <HorizontalStackLayout Spacing="5">
+                                    <Image Source="people.png" 
+                           HeightRequest="16"
+                           WidthRequest="16"
+                           VerticalOptions="Center" />
+
                                     <Label Text="{Binding MemberCount}"
-                                           FontSize="14" />
+                           FontSize="14"
+                           VerticalOptions="Center" />
 
-                                    <Label Text=" | Создатель: "
-                                           FontSize="14"
-                                           TextColor="Gray" />
+                                    <Label Text="•"
+                           FontSize="14"
+                           TextColor="Gray"
+                           VerticalOptions="Center" />
+
+                                    <Image Source="person.png"
+                           HeightRequest="16"
+                           WidthRequest="16"
+                           VerticalOptions="Center" />
+
                                     <Label Text="{Binding CreatorName}"
-                                           FontSize="14"
-                                           TextColor="Gray" />
+                           FontSize="14"
+                           FontAttributes="Bold"
+                           VerticalOptions="Center" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
                         </Frame>

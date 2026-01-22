@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Hubbly.Mobile.Views.ChatRoomPage"
+             Title="Чат">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="← Назад" 
+                     Clicked="OnBackClicked"
+                     Order="Primary"
+                     Priority="0" />
+        <ToolbarItem Text="🔄" 
+                     Clicked="OnRefreshClicked"
+                     Order="Primary"
+                     Priority="1" />
+    </ContentPage.ToolbarItems>
+
+    <ContentPage.Content>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Заголовок комнаты -->
+            <Frame Grid.Row="0"
+                   Padding="15"
+                   BackgroundColor="#512BD4"
+                   CornerRadius="0">
+                <VerticalStackLayout>
+                    <Label x:Name="RoomTitleLabel"
+                           Text="Название комнаты"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="White" />
+
+                    <Label x:Name="RoomInfoLabel"
+                           Text="Информация"
+                           FontSize="12"
+                           TextColor="White" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Список сообщений -->
+            <CollectionView Grid.Row="1"
+                            x:Name="MessagesCollection"
+                            VerticalOptions="FillAndExpand">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="10"
+                               Margin="5,2"
+                               CornerRadius="10"
+                               BackgroundColor="LightGray">
+                            <VerticalStackLayout>
+                                <HorizontalStackLayout>
+                                    <Label Text="{Binding SenderName}"
+                                           FontSize="14"
+                                           FontAttributes="Bold"
+                                           TextColor="Black" />
+
+                                    <Label Text=" • "
+                                           FontSize="14" />
+
+                                    <Label Text="{Binding CreatedAt, StringFormat='{0:HH:mm}'}"
+                                           FontSize="12"
+                                           TextColor="Gray" />
+                                </HorizontalStackLayout>
+
+                                <Label Text="{Binding Text}"
+                                       FontSize="16"
+                                       LineBreakMode="WordWrap"
+                                       Margin="0,5,0,0" />
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <!-- Поле ввода сообщения -->
+            <Grid Grid.Row="2"
+                  Padding="10"
+                  BackgroundColor="Gray">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Entry x:Name="MessageEntry"
+                       Grid.Column="0"
+                       Placeholder="Введите сообщение..."
+                       Completed="OnMessageSendRequested" />
+
+                <Button Grid.Column="1"
+                        Text="📤"
+                        Clicked="OnSendClicked"
+                        BackgroundColor="#512BD4"
+                        TextColor="White"
+                        WidthRequest="50"
+                        Margin="10,0,0,0" />
+            </Grid>
+
+            <ActivityIndicator x:Name="LoadingIndicator"
+                               Grid.Row="1"
+                               IsRunning="False"
+                               Color="#512BD4"
+                               VerticalOptions="Center"
+                               HorizontalOptions="Center" />
+        </Grid>
+    </ContentPage.Content>
+
+</ContentPage>

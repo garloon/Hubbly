@@ -59,12 +59,30 @@ public class MessagesController : BaseApiController
     [HttpPost("room/{roomId}")]
     public async Task<IActionResult> SendMessage(Guid roomId, [FromBody] SendMessageDto dto)
     {
+        Console.WriteLine($"=== SendMessage called ===");
+        Console.WriteLine($"RoomId: {roomId}");
+        Console.WriteLine($"Text: {dto.Text}");
+
         if (string.IsNullOrWhiteSpace(dto.Text))
-            return BadRequestWithError("Message text is required");
+            return BadRequest(new { error = "Message text is required" });
 
         try
         {
             var message = await _chatService.SendMessageAsync(CurrentUserId, roomId, dto);
+
+            // ЛОГИРУЕМ ОТВЕТ
+            var response = new
+            {
+                message.Id,
+                message.Text,
+                message.SenderId,
+                message.RoomId,
+                message.Type,
+                message.CreatedAt
+            };
+
+            Console.WriteLine($"Sending response: {System.Text.Json.JsonSerializer.Serialize(response)}");
+
             return Ok(message);
         }
         catch (UnauthorizedAccessException ex)
@@ -73,7 +91,7 @@ public class MessagesController : BaseApiController
         }
         catch (Exception ex)
         {
-            return BadRequestWithError($"Failed to send message: {ex.Message}");
+            return BadRequest(new { error = $"Failed to send message: {ex.Message}" });
         }
     }
 

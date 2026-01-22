@@ -245,6 +245,18 @@ public class RoomService : IRoomService
         return true;
     }
 
+    public async Task<RoomDto?> GetNoviceRoomAsync(Guid userId)
+    {
+        var room = await _context.ChatRooms
+            .Include(r => r.Creator)
+            .FirstOrDefaultAsync(r => r.Type == RoomType.SystemNovice && !r.IsDeleted);
+
+        if (room == null)
+            return null;
+
+        return await MapToRoomDtoAsync(room, userId);
+    }
+
     // Вспомогательные методы
     private async Task<RoomDto> MapToRoomDtoAsync(ChatRoom room, Guid? userId = null)
     {

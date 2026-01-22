@@ -61,13 +61,6 @@ public class RoomsController : BaseApiController
         return Ok(rooms);
     }
 
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetRoom(Guid id)
-    {
-        var room = await _roomService.GetRoomByIdAsync(id, _currentUserService.UserId);
-        return OkOrNotFound(room, "Room not found");
-    }
-
     [HttpGet("{id}/details")]
     public async Task<IActionResult> GetRoomDetails(Guid id)
     {
@@ -134,6 +127,36 @@ public class RoomsController : BaseApiController
             return Ok(new { message = "Successfully left the room" });
 
         return BadRequestWithError("Failed to leave room. You may be the creator or not a member.");
+    }
+
+    [HttpGet("novice")]
+    public async Task<IActionResult> GetNoviceRoom()
+    {
+        if (!_currentUserService.UserId.HasValue)
+            return Unauthorized();
+
+        var room = await _roomService.GetNoviceRoomAsync(_currentUserService.UserId.Value);
+
+        if (room == null)
+            return NotFound(new { error = "Novice room not found" });
+
+        return Ok(room);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetRoom(Guid id)
+    {
+        var room = await _roomService.GetRoomByIdAsync(id, _currentUserService.UserId);
+        return OkOrNotFound(room, "Room not found");
+    }
+
+    private IActionResult OkOrNotFound<T>(T? result, string? message = null)
+    {
+        if (result == null)
+        {
+            return NotFound(new { error = message ?? "Resource not found" });
+        }
+        return Ok(result);
     }
 }
 

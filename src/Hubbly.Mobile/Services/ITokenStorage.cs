@@ -5,11 +5,13 @@ public interface ITokenStorage
     Task<string?> GetTokenAsync();
     Task SaveTokenAsync(string token);
     Task DeleteTokenAsync();
+    Task<bool> IsAuthenticatedAsync();
 }
 
 public class SecureStorageTokenService : ITokenStorage
 {
     private const string TokenKey = "auth_token";
+
 
     public async Task<string?> GetTokenAsync()
     {
@@ -25,5 +27,11 @@ public class SecureStorageTokenService : ITokenStorage
     {
         SecureStorage.Default.Remove(TokenKey);
         await Task.CompletedTask;
+    }
+
+    public async Task<bool> IsAuthenticatedAsync()
+    {
+        var token = await GetTokenAsync();
+        return !string.IsNullOrEmpty(token);
     }
 }

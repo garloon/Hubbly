@@ -57,12 +57,14 @@ public static class MauiProgram
         builder.Services.AddSingleton<IApiService, ApiService>();
 
         builder.Services.AddSingleton<INavigationService, NavigationService>();
+        builder.Services.AddSingleton<IUserStateService, UserStateService>();
 
         // Страницы
         builder.Services.AddTransient<MainPage>();
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<VerifyOtpPage>();
         builder.Services.AddTransient<RoomsPage>();
+        builder.Services.AddTransient<ChatRoomPage>();
 
         return builder.Build();
     }
@@ -70,6 +72,6 @@ public static class MauiProgram
     private static string GetBaseUrl()
     {
         // ВСЕГДА используем ваш IP
-        return "http://192.168.0.102:5081";
+        return "http://192.168.1.203:5081";
     }
 }
