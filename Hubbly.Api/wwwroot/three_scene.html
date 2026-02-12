@@ -706,6 +706,7 @@
                         window.clickableObjects.push(obj);
                     }
                 });
+                console.log(`🎯 Clickable objects: ${window.clickableObjects.length}`);
             }
 
             function findAvatarData(obj) {
@@ -727,25 +728,36 @@
                 if (currentTime - lastClickTime < clickDelay) return;
                 lastClickTime = currentTime;
 
+                // 1. Координаты мыши
                 const rect = canvas.getBoundingClientRect();
-                const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                const mouse = new THREE.Vector2();
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+                // 2. Правильный луч для OrthographicCamera
                 const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+                const origin = camera.position.clone();
+                const direction = new THREE.Vector3(mouse.x, mouse.y, 0)
+                    .unproject(camera)
+                    .sub(origin)
+                    .normalize();
 
-                // 🔥 ВИЗУАЛИЗАЦИЯ ЛУЧА
+                raycaster.set(origin, direction);
+                raycaster.far = 1000;
+
+                // 3. Визуализация (отладка)
                 const arrow = new THREE.ArrowHelper(
                     raycaster.ray.direction,
                     raycaster.ray.origin,
-                    5,
+                    10,
                     0xff0000
                 );
                 scene.add(arrow);
-                setTimeout(() => scene.remove(arrow), 1000);
+                setTimeout(() => scene.remove(arrow), 500);
 
+                // 4. Проверка пересечений
                 const intersects = raycaster.intersectObjects(window.clickableObjects, true);
-                console.log(`🎯 Intersects: ${intersects.length}`, intersects);
+                console.log(`🎯 Intersects: ${intersects.length}`);
 
                 if (intersects.length > 0) {
                     const userId = findAvatarData(intersects[0].object);
@@ -766,7 +778,6 @@
             };
 
             canvas.addEventListener('click', window.handleClick);
-
             canvas.addEventListener('touchend', (event) => {
                 if (event.touches.length === 0) {
                     const touch = event.changedTouches[0];
