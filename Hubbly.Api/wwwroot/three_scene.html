@@ -712,46 +712,94 @@
 
         function setupRaycaster() {
             const canvas = document.getElementById('renderCanvas');
+            const clickableObjects = []; // Храним здесь все кликабельные объекты
 
-            canvas.addEventListener('click', (event) => {
-                // 1. Координаты мыши
+            // Функция для обновления списка кликабельных объектов
+            function updateClickableObjects() {
+                clickableObjects.length = 0; // Очищаем массив
+                scene.traverse(obj => {
+                    if (obj.isMesh && (obj.userData.avatarId || obj.userData.avatar)) {
+                        clickableObjects.push(obj);
+                    }
+                });
+            }
+
+            // Функция для поиска ID аватара в иерархии объектов
+            function findAvatarData(obj) {
+                while (obj) {
+                    if (obj.userData.avatarId) return obj.userData.avatarId;
+                    if (obj.userData.avatar?.userId) return obj.userData.avatar.userId;
+                    obj = obj.parent; // Поднимаемся выше по иерархии
+                }
+                return null;
+            }
+
+            // Первоначальное обновление списка
+            updateClickableObjects();
+
+            // Обновляем список при добавлении/удалении аватаров
+            const originalAddAvatar = avatarManager.addAvatar;
+            avatarManager.addAvatar = function (userId, nickname, gender, isCurrentUser) {
+                const result = originalAddAvatar.call(this, userId, nickname, gender, isCurrentUser);
+                if (result) updateClickableObjects();
+                return result;
+            };
+
+            const originalRemoveAvatar = avatarManager.removeAvatar;
+            avatarManager.removeAvatar = function (userId) {
+                const result = originalRemoveAvatar.call(this, userId);
+                if (result) updateClickableObjects();
+                return result;
+            };
+
+            let lastClickTime = 0;
+            const clickDelay = 300; // Задержка между кликами (мс)
+
+            // Обработчик кликов
+            const handleClick = (event) => {
+                const currentTime = Date.now();
+                if (currentTime - lastClickTime < clickDelay) return; // Игнорируем двойные клики
+                lastClickTime = currentTime;
+
+                // Получаем координаты клика
                 const rect = canvas.getBoundingClientRect();
                 const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-                // 2. Raycaster
+                // Создаём луч (ray) из камеры в точку клика
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
 
-                // 3. ПРЯМОЙ ПЕРЕБОР ВСЕХ ДЕТЕЙ СЦЕНЫ
-                const objects = [];
-                scene.traverse(obj => {
-                    if (obj.isMesh && obj.userData.avatarId) {
-                        objects.push(obj);
-                    }
-                });
-
-                console.log(`🔍 Checking ${objects.length} avatar meshes`);
-
-                const intersects = raycaster.intersectObjects(objects);
+                // Проверяем пересечения с кликабельными объектами
+                const intersects = raycaster.intersectObjects(clickableObjects);
 
                 if (intersects.length > 0) {
-                    const hit = intersects[0].object;
-                    const userId = hit.userData.avatarId ||
-                        hit.userData.avatar?.userId ||
-                        hit.parent?.userData.avatarId;
-
+                    const userId = findAvatarData(intersects[0].object);
                     if (userId) {
+                        // Отправляем событие в MAUI
                         if (window.webkit?.messageHandlers?.hubbly3d) {
                             window.webkit.messageHandlers.hubbly3d.postMessage(JSON.stringify({
                                 type: 'avatar_clicked',
                                 userId: userId
                             }));
                         }
-                        console.log(`✅ HIT: ${userId}`);
+                        console.log(`✅ Клик по аватару: ${userId}`);
                     }
-                } else {
-                    console.log('❌ No hit');
+                }
+            };
+
+            // Обработчики событий
+            canvas.addEventListener('click', handleClick);
+
+            // Поддержка тач-экранов
+            canvas.addEventListener('touchend', (event) => {
+                if (event.touches.length === 0) { // Клик завершён
+                    const touch = event.changedTouches[0];
+                    const mouseEvent = new MouseEvent('click', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    handleClick(mouseEvent);
                 }
             });
         }
