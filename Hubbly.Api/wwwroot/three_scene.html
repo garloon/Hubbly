@@ -704,9 +704,9 @@
                 scene.traverse(obj => {
                     if (obj.isMesh && obj.userData.avatarId) {
                         window.clickableObjects.push(obj);
+                        console.log(`📌 Avatar mesh: ${obj.userData.avatarId} at`, obj.position.clone());
                     }
                 });
-                console.log(`🎯 Clickable objects: ${window.clickableObjects.length}`);
             }
 
             function findAvatarData(obj) {
@@ -728,24 +728,19 @@
                 if (currentTime - lastClickTime < clickDelay) return;
                 lastClickTime = currentTime;
 
-                // 1. Координаты мыши
+                // 1. Нормализованные координаты мыши (-1 до 1)
                 const rect = canvas.getBoundingClientRect();
                 const mouse = new THREE.Vector2();
                 mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-                // 2. Правильный луч для OrthographicCamera
+                // 2. Для OrthographicCamera: луч идет ПАРАЛЛЕЛЬНО из точки клика
                 const raycaster = new THREE.Raycaster();
-                const origin = camera.position.clone();
-                const direction = new THREE.Vector3(mouse.x, mouse.y, 0)
-                    .unproject(camera)
-                    .sub(origin)
-                    .normalize();
 
-                raycaster.set(origin, direction);
-                raycaster.far = 1000;
+                // Устанавливаем луч из координат мыши в мировом пространстве
+                raycaster.setFromCamera(mouse, camera);
 
-                // 3. Визуализация (отладка)
+                // 3. Визуализация
                 const arrow = new THREE.ArrowHelper(
                     raycaster.ray.direction,
                     raycaster.ray.origin,
@@ -755,7 +750,7 @@
                 scene.add(arrow);
                 setTimeout(() => scene.remove(arrow), 500);
 
-                // 4. Проверка пересечений
+                // 4. Проверяем пересечения
                 const intersects = raycaster.intersectObjects(window.clickableObjects, true);
                 console.log(`🎯 Intersects: ${intersects.length}`);
 
