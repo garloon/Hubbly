@@ -716,36 +716,41 @@
             const canvas = document.getElementById('renderCanvas');
 
             canvas.addEventListener('click', (event) => {
-                // Нормализованные координаты мыши (-1 до 1)
-                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-                console.log("🖱️ Canvas clicked at:", event.clientX, event.clientY);
+                // Нормализованные координаты для OrthographicCamera
+                mouse.x = (event.clientX / canvas.clientWidth) * 2 - 1;
+                mouse.y = -(event.clientY / canvas.clientHeight) * 2 + 1;
 
                 raycaster.setFromCamera(mouse, camera);
 
-                // Собираем все mesh аватаров
-                const avatars = [];
+                // СОБИРАЕМ ВСЕ MESH АВАТАРОВ
+                const allMeshes = [];
                 avatarManager.getAvatars().forEach(avatar => {
-                    if (avatar.mesh) avatars.push(avatar.mesh);
+                    if (avatar.mesh) {
+                        // У плейсхолдера mesh — сам mesh
+                        allMeshes.push(avatar.mesh);
+
+                        // У GLB модели — все дочерние mesh
+                        avatar.mesh.traverse((child) => {
+                            if (child.isMesh) allMeshes.push(child);
+                        });
+                    }
                 });
 
-                const intersects = raycaster.intersectObjects(avatars);
+                const intersects = raycaster.intersectObjects(allMeshes);
 
                 if (intersects.length > 0) {
-                    // Берём первый попавшийся объект
                     const hit = intersects[0].object;
 
-                    // Поднимаемся до корня аватара
+                    // Ищем корневой объект аватара
                     let root = hit;
                     while (root.parent && root.parent !== scene) {
                         root = root.parent;
                     }
 
-                    const userId = root.userData.avatar?.userId;
+                    const userId = root.userData?.avatarId || root.userData?.avatar?.userId;
+
                     if (userId) {
-                        // Отправляем событие в MAUI
-                        if (window.webkit && window.webkit.messageHandlers) {
+                        if (window.webkit?.messageHandlers?.hubbly3d) {
                             window.webkit.messageHandlers.hubbly3d.postMessage(JSON.stringify({
                                 type: 'avatar_clicked',
                                 userId: userId
@@ -753,9 +758,9 @@
                         }
                         console.log(`👆 Avatar clicked: ${userId}`);
                     }
+                } else {
+                    console.log("❌ No avatar hit");
                 }
-
-                console.log(`🎯 Intersects found: ${intersects.length}`);
             });
         }
 
