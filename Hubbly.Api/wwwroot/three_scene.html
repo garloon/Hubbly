@@ -586,29 +586,43 @@
                 if (currentTime - lastClickTime < clickDelay) return;
                 lastClickTime = currentTime;
 
+                console.log('🖱️ CLICK DETECTED!', event.clientX, event.clientY); // 👈 ЛОГ
+
                 const rect = canvas.getBoundingClientRect();
                 const mouse = new THREE.Vector2();
                 mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+                console.log('🎯 Mouse normalized:', mouse.x, mouse.y); // 👈 ЛОГ
+
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, camera);
                 camera.updateMatrixWorld(true);
 
+                console.log('🔍 Ray origin:', raycaster.ray.origin.clone()); // 👈 ЛОГ
+                console.log('🔍 Ray direction:', raycaster.ray.direction.clone()); // 👈 ЛОГ
+                console.log('📦 Clickable objects:', window.clickableObjects?.length); // 👈 ЛОГ
+
                 const intersects = raycaster.intersectObjects(window.clickableObjects, true);
+                console.log('🎯 Intersects:', intersects.length); // 👈 ЛОГ
 
                 if (intersects.length > 0) {
                     let obj = intersects[0].object;
                     while (obj && !obj.userData?.avatarId) obj = obj.parent;
 
                     if (obj?.userData?.avatarId) {
+                        console.log('✅ HIT! Avatar ID:', obj.userData.avatarId); // 👈 ЛОГ
+
                         if (window.hubblyBridge) {
                             window.hubblyBridge.postMessage(JSON.stringify({
                                 type: 'avatar_clicked',
                                 userId: obj.userData.avatarId
                             }));
+                            console.log('📨 Sent via bridge'); // 👈 ЛОГ
                         }
                     }
+                } else {
+                    console.log('❌ No hit'); // 👈 ЛОГ
                 }
             };
 
