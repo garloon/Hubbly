@@ -1,0 +1,61 @@
+name: Deploy Hubbly API
+
+on:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Publish project
+      run: dotnet publish Hubbly.Api -c Release -o ./publish
+      
+    - name: Create tar archive
+      run: tar -czf publish.tar.gz -C publish .
+      
+    - name: Copy to server
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        port: ${{ secrets.SERVER_PORT }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        source: "publish.tar.gz"
+        target: "/opt"
+        
+    - name: Deploy on server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        port: ${{ secrets.SERVER_PORT }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          # Распаковываем
+          rm -rf /opt/hubbly-publish-new
+          mkdir -p /opt/hubbly-publish-new
+          tar -xzf /opt/publish.tar.gz -C /opt/hubbly-publish-new
+          rm /opt/publish.tar.gz
+          
+          # Копируем wwwroot из старой версии
+          cp -r /opt/hubbly-publish/wwwroot /opt/hubbly-publish-new/ || true
+          
+          # Меняем местами
+          rm -rf /opt/hubbly-publish-old
+          mv /opt/hubbly-publish /opt/hubbly-publish-old || true
+          mv /opt/hubbly-publish-new /opt/hubbly-publish
+          
+          # Перезапускаем
+          systemctl restart hubbly
+          sleep 5
+          systemctl status hubbly

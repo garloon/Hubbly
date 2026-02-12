@@ -1,0 +1,73 @@
+## .NET Core
+bin/
+obj/
+publish/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleasePs/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio
+.vs/
+*.csproj.user
+*.csproj.user
+_ReSharper*/
+*.resharper
+*.DotSettings.user
+.vscode/
+
+## Environment
+appsettings.Development.json
+appsettings.Development.*.json
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Secret files
+secrets.json
+*.secrets.json
+
+## ASP.NET Core
+[Pp]ublish/
+*.dbmdl
+*.dbml
+*.psess
+
+## Entity Framework
+*.edmx
+*.psess
+*.ppkg
+
+## SQLite
+*.db
+*.db-shm
+*.db-wal
+
+## OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.bak
+*.tmp
+*.log
