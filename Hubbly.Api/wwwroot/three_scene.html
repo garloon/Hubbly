@@ -691,9 +691,14 @@
             }
         }
 
+        let handleClick;
+        let clickableObjects = [];
+        let lastClickTime = 0;
+        const clickDelay = 300;
+
         function setupRaycaster() {
             const canvas = document.getElementById('renderCanvas');
-            const clickableObjects = [];
+            clickableObjects = [];
 
             // Функция обновления списка кликабельных объектов
             function updateClickableObjects() {
@@ -717,17 +722,10 @@
             }
 
             window.__updateClickableObjects = updateClickableObjects;
-
-            // Первое обновление
             updateClickableObjects();
-
-            // Периодическое обновление (на всякий случай)
             setInterval(updateClickableObjects, 3000);
 
-            let lastClickTime = 0;
-            const clickDelay = 300;
-
-            const handleClick = (event) => {
+            handleClick = (event) => {
                 const currentTime = Date.now();
                 if (currentTime - lastClickTime < clickDelay) return;
                 lastClickTime = currentTime;
@@ -751,26 +749,17 @@
                             userId: userId
                         });
 
-                        // ANDROID
                         if (window.hubblyBridge) {
                             window.hubblyBridge.postMessage(message);
                             console.log('✅ Sent via hubblyBridge');
-                        }
-
-                        // iOS
-                        if (window.webkit?.messageHandlers?.hubbly3d) {
-                            window.webkit.messageHandlers.hubbly3d.postMessage(message);
-                        }
-
-                        // Windows
-                        if (window.chrome?.webview) {
-                            window.chrome.webview.postMessage(message);
                         }
                     }
                 }
             };
 
             canvas.addEventListener('click', handleClick);
+
+            // Поддержка тач-экранов
             canvas.addEventListener('touchend', (event) => {
                 if (event.touches.length === 0) {
                     const touch = event.changedTouches[0];
@@ -781,6 +770,8 @@
                     handleClick(mouseEvent);
                 }
             });
+
+            console.log('✅ Raycaster setup complete');
         }
 
         window.hubbly3d = {
