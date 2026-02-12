@@ -713,6 +713,7 @@
         function setupRaycaster() {
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
+            const canvas = document.getElementById('renderCanvas');
 
             canvas.addEventListener('click', (event) => {
                 // Нормализованные координаты мыши (-1 до 1)
