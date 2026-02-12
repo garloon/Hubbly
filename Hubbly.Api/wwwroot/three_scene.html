@@ -61,7 +61,6 @@
                 transform: rotate(360deg);
             }
         }
-
     </style>
 </head>
 <body>
@@ -77,13 +76,14 @@
             SERVER_BASE_URL: "http://89.169.46.33:5000/",
             SLOT_COUNT: 10,
             SLOT_SPACING: 2.5,
-            CAMERA_HEIGHT: 2.5,
+            CAMERA_HEIGHT: 1.1,        // Смотрим в центр аватара
             CAMERA_DISTANCE: 1.5,
             SCROLL_SENSITIVITY: 0.005,
             HIGHLIGHT_COLOR: 0x8b5cf6,
             DEFAULT_COLOR: 0x3b82f6,
             MODEL_SCALE: 1.5,
-            // Добавляем пути к анимациям
+            AVATAR_HEIGHT: 1.8,         // Высота аватара
+            AVATAR_CENTER_Y: 1.1,       // Центр аватара по Y
             ANIMATIONS: {
                 idle: 'idle.glb',
                 clap: 'clapping.glb'
@@ -94,7 +94,7 @@
         let avatarManager;
         let cameraController;
         let isInitialized = false;
-        let clock = new THREE.Clock(); // Добавляем часы для анимаций
+        let clock = new THREE.Clock();
 
         class Avatar {
             constructor(userId, nickname, gender, isCurrentUser = false) {
@@ -103,10 +103,10 @@
                 this.gender = gender;
                 this.isCurrentUser = isCurrentUser;
                 this.mesh = null;
-                this.mixer = null;          // Анимационный микшер
-                this.actions = new Map();   // Мап для действий анимаций
-                this.currentAction = null;  // Текущая анимация
-                this.animationClips = new Map(); // Загруженные анимационные клипы
+                this.mixer = null;
+                this.actions = new Map();
+                this.currentAction = null;
+                this.animationClips = new Map();
                 this.slotIndex = -1;
                 this.isLoaded = false;
                 this.usingFallback = false;
@@ -130,11 +130,15 @@
                 this.mesh.userData.nickname = this.nickname;
                 this.mesh.name = `avatar_${this.userId}`;
 
+                // Тень
                 const shadowGeometry = new THREE.CircleGeometry(0.6, 32);
                 const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 });
                 const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
                 shadow.rotation.x = -Math.PI / 2;
                 shadow.position.y = -0.9;
+                shadow.userData.avatar = this;
+                shadow.userData.avatarId = this.userId;
+                shadow.userData.nickname = this.nickname;
                 this.mesh.add(shadow);
             }
 
@@ -163,8 +167,6 @@
                     const newMesh = await this.loadGLBModel();
                     this.usingFallback = false;
 
-                    console.log(`[MODEL] ✅ Loaded GLB model for ${this.nickname}`);
-
                     if (newMesh) {
                         if (this.mesh && parent) {
                             parent.remove(this.mesh);
@@ -173,10 +175,13 @@
 
                         this.mesh = newMesh;
                         this.mesh.position.copy(currentPosition);
+
+                        // ✅ Проставляем userData на корень
                         this.mesh.userData.avatar = this;
                         this.mesh.userData.avatarId = this.userId;
                         this.mesh.userData.nickname = this.nickname;
 
+                        // ✅ Проставляем userData на все дочерние mesh
                         this.mesh.traverse((child) => {
                             if (child.isMesh) {
                                 child.userData.avatar = this;
@@ -186,14 +191,12 @@
                             }
                         });
 
-                        // Создаем анимационный микшер
                         this.mixer = new THREE.AnimationMixer(this.mesh);
 
                         if (parent) {
                             parent.add(this.mesh);
                         }
 
-                        // Загружаем и запускаем idle анимацию
                         await this.loadAndPlayIdleAnimation();
                     }
 
@@ -217,8 +220,6 @@
                         return reject(new Error("Unknown gender specified."));
                     }
 
-                    console.log(`[MODEL] Loading GLB from: ${modelPath}`);
-
                     const loader = new GLTFLoader();
 
                     const onLoad = (gltf) => {
@@ -226,7 +227,6 @@
                         model.scale.set(CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE);
                         model.name = `glb_avatar_${this.userId}`;
 
-                        // Плавное появление модели
                         model.traverse((child) => {
                             if (child.isMesh && child.material) {
                                 child.castShadow = true;
@@ -257,17 +257,10 @@
                     const idleAnimation = await this.loadAnimation('idle');
 
                     if (idleAnimation) {
-                        // Сохраняем клип
                         this.animationClips.set('idle', idleAnimation);
-
-                        // Создаем действие из анимации
                         const action = this.mixer.clipAction(idleAnimation);
                         this.actions.set('idle', action);
-
-                        // Автоматически запускаем idle анимацию
                         this.playAnimation('idle', true, 0.5);
-
-                        console.log(`[ANIM] ✅ Idle animation loaded and playing for ${this.nickname}`);
                     }
                 } catch (error) {
                     console.warn(`[ANIM] Could not load idle animation for ${this.nickname}:`, error.message);
@@ -278,7 +271,6 @@
                 return new Promise((resolve, reject) => {
                     let animationPath;
 
-                    // Формируем путь к анимации
                     if (this.gender === 'male') {
                         animationPath = `${CONFIG.SERVER_BASE_URL}animations/male_${CONFIG.ANIMATIONS[animationName]}`;
                     } else if (this.gender === 'female') {
@@ -287,15 +279,12 @@
                         return reject(new Error("Unknown gender for animation"));
                     }
 
-                    console.log(`[ANIM] Loading animation "${animationName}" from: ${animationPath}`);
-
                     const loader = new GLTFLoader();
 
                     const onLoad = (gltf) => {
                         if (gltf.animations && gltf.animations.length > 0) {
                             const animation = gltf.animations[0];
-                            animation.name = animationName; // Переименовываем для удобства
-                            console.log(`[ANIM] Loaded "${animationName}" (${animation.duration.toFixed(2)}s)`);
+                            animation.name = animationName;
                             resolve(animation);
                         } else {
                             reject(new Error(`No animations found in ${animationPath}`));
@@ -312,7 +301,6 @@
             }
 
             async playAnimation(animationName, loop = true, fadeDuration = 0.3) {
-                // Если анимация еще не загружена, загружаем ее
                 if (!this.actions.has(animationName)) {
                     try {
                         const animationClip = await this.loadAnimation(animationName);
@@ -333,7 +321,6 @@
                     return false;
                 }
 
-                // Плавный переход между анимациями
                 if (this.currentAction) {
                     this.currentAction.fadeOut(fadeDuration);
                 }
@@ -344,8 +331,6 @@
                 action.fadeIn(fadeDuration).play();
 
                 this.currentAction = action;
-
-                console.log(`[ANIM] Playing "${animationName}" for ${this.nickname}`);
                 return true;
             }
 
@@ -363,14 +348,9 @@
 
             updatePosition() {
                 if (this.slotIndex < 0 || !this.mesh) return;
-
                 const xPos = this.slotIndex * CONFIG.SLOT_SPACING;
-
-                if (this.mesh) {
-                    // Для анимированных моделей немного другая высота
-                    const yPos = this.isLoaded && !this.usingFallback ? 1.1 : 0.9;
-                    this.mesh.position.set(xPos, yPos, 0);
-                }
+                // ✅ Центр аватара всегда на Y = 1.1
+                this.mesh.position.set(xPos, CONFIG.AVATAR_CENTER_Y, 0);
             }
 
             update(deltaTime) {
@@ -419,14 +399,10 @@
                 this.avatars.set(userId, avatar);
                 scene.add(avatar.mesh);
 
-                // Задержка для последовательной загрузки
                 setTimeout(() => {
-                    avatar.loadModel().then(() => {
-                        this.updateUI();
-                    });
+                    avatar.loadModel();
                 }, 300 + (this.getAvatarCount() * 200));
 
-                this.updateUI();
                 return true;
             }
 
@@ -439,7 +415,6 @@
 
                 avatar.dispose();
                 this.avatars.delete(userId);
-                this.updateUI();
                 return true;
             }
 
@@ -461,7 +436,6 @@
                 }
                 this.avatars.clear();
                 this.availableSlots = Array.from({ length: CONFIG.SLOT_COUNT }, (_, i) => i);
-                this.updateUI();
             }
 
             updateAvatars(deltaTime) {
@@ -472,18 +446,13 @@
 
             playAvatarAnimation(userId, animationName = 'idle', loop = true) {
                 const avatar = this.avatars.get(userId);
-                if (!avatar) {
-                    console.warn(`[ANIM] Avatar ${userId} not found`);
-                    return false;
-                }
-
+                if (!avatar) return false;
                 return avatar.playAnimation(animationName, loop);
             }
 
             stopAvatarAnimation(userId) {
                 const avatar = this.avatars.get(userId);
                 if (!avatar) return false;
-
                 avatar.stopAnimation();
                 return true;
             }
@@ -495,7 +464,6 @@
                         successCount++;
                     }
                 }
-                console.log(`[ANIM] Playing "${animationName}" for ${successCount} avatars`);
                 return successCount;
             }
 
@@ -505,13 +473,7 @@
                     avatar.stopAnimation();
                     successCount++;
                 }
-                console.log(`[ANIM] Stopped animations for ${successCount} avatars`);
                 return successCount;
-            }
-
-            updateUI() {
-                const countElement = document.getElementById('avatarCount');
-                if (countElement) countElement.textContent = `👥 ${this.getAvatarCount()} online`;
             }
         }
 
@@ -529,7 +491,11 @@
 
             setupCamera() {
                 const aspect = window.innerWidth / window.innerHeight;
-                const frustumSize = 3.5;
+
+                // ✅ Расчёт фрустума: аватар высотой 1.8 занимает 75% экрана
+                // frustumSize = высота_аватара / желаемый_процент = 1.8 / 0.75 = 2.4
+                const frustumSize = 2.4;
+
                 this.camera.left = -frustumSize * aspect / 2;
                 this.camera.right = frustumSize * aspect / 2;
                 this.camera.top = frustumSize / 2;
@@ -538,8 +504,9 @@
                 this.camera.far = 1000;
                 this.camera.updateProjectionMatrix();
 
-                this.camera.position.set(0, CONFIG.CAMERA_HEIGHT, CONFIG.CAMERA_DISTANCE);
-                this.camera.lookAt(0, CONFIG.CAMERA_HEIGHT, 0);
+                // ✅ Смотрим в центр аватара (Y = 1.1)
+                this.camera.position.set(0, CONFIG.AVATAR_CENTER_Y, CONFIG.CAMERA_DISTANCE);
+                this.camera.lookAt(0, CONFIG.AVATAR_CENTER_Y, 0);
             }
 
             setupEventListeners() {
@@ -614,7 +581,6 @@
                 const targetSlot = Math.round(this.camera.position.x / CONFIG.SLOT_SPACING);
                 const maxSlots = Math.floor(CONFIG.SLOT_COUNT / 2);
                 const minSlot = -maxSlots;
-
                 this.targetX = Math.max(minSlot, Math.min(maxSlots, targetSlot)) * CONFIG.SLOT_SPACING;
             }
 
@@ -647,15 +613,10 @@
             avatarManager = new AvatarManager();
             cameraController = new CameraController(camera);
 
-            // Создаем элемент статус-бара если его нет
-            if (!document.getElementById('statusBar')) {
-                const statusBar = document.createElement('div');
-                statusBar.id = 'statusBar';
-                statusBar.innerHTML = `
-                            <div>Hubbly 3D Avatars</div>
-                            <div id="avatarCount">👥 0 online</div>
-                        `;
-                document.body.appendChild(statusBar);
+            // ✅ Удаляем statusBar полностью
+            const existingStatusBar = document.getElementById('statusBar');
+            if (existingStatusBar) {
+                existingStatusBar.remove();
             }
 
             setupRaycaster();
@@ -663,6 +624,12 @@
             setTimeout(() => {
                 isInitialized = true;
                 console.log('✅ Three.js initialized successfully');
+
+                // Убираем loadingOverlay
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
             }, 1000);
         }
 
@@ -679,13 +646,8 @@
             directionalLight.shadow.camera.far = 50;
             scene.add(directionalLight);
 
-            //const planeGeometry = new THREE.PlaneGeometry(30, 30);
-            //const planeMaterial = new THREE.MeshPhongMaterial({ color: 0x111111, side: THREE.DoubleSide });
-            //const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-            //plane.rotation.x = -Math.PI / 2;
-            //plane.position.y = -1.1;
-            //plane.receiveShadow = true;
-            //scene.add(plane);
+            // Пол убираем совсем — тени падают на невидимую плоскость
+            // или можно оставить прозрачный пол для теней
         }
 
         function animate() {
@@ -707,23 +669,10 @@
             }
         }
 
-        function notifyMAUI(type, data = {}) {
-            const message = JSON.stringify({ type, data });
-
-            if (window.chrome && window.chrome.webview) {
-                window.chrome.webview.postMessage(message);
-            }
-            else if (window.webkit && window.webkit.messageHandlers) {
-                window.webkit.messageHandlers.hubbly3d.postMessage(message);
-            }
-            console.log(`JS: Notified MAUI: ${type}`, data);
-        }
-
         function setupRaycaster() {
             const canvas = document.getElementById('renderCanvas');
-            const clickableObjects = []; // Храним здесь все кликабельные объекты (только аватары)
+            const clickableObjects = [];
 
-            // Функция для обновления списка кликабельных объектов
             function updateClickableObjects() {
                 clickableObjects.length = 0;
                 scene.traverse(obj => {
@@ -733,20 +682,17 @@
                 });
             }
 
-            // Функция для поиска ID аватара в иерархии объектов
             function findAvatarData(obj) {
                 while (obj) {
                     if (obj.userData.avatarId) return obj.userData.avatarId;
                     if (obj.userData.avatar?.userId) return obj.userData.avatar.userId;
-                    obj = obj.parent; // Поднимаемся выше по иерархии
+                    obj = obj.parent;
                 }
                 return null;
             }
 
-            // Первоначальное обновление списка
             updateClickableObjects();
 
-            // Обновляем список при добавлении/удалении аватаров
             const originalAddAvatar = avatarManager.addAvatar;
             avatarManager.addAvatar = function (userId, nickname, gender, isCurrentUser) {
                 const result = originalAddAvatar.call(this, userId, nickname, gender, isCurrentUser);
@@ -762,30 +708,25 @@
             };
 
             let lastClickTime = 0;
-            const clickDelay = 300; // Задержка между кликами (мс)
+            const clickDelay = 300;
 
-            // Обработчик кликов
             const handleClick = (event) => {
                 const currentTime = Date.now();
-                if (currentTime - lastClickTime < clickDelay) return; // Игнорируем двойные клики
+                if (currentTime - lastClickTime < clickDelay) return;
                 lastClickTime = currentTime;
 
-                // Получаем координаты клика
                 const rect = canvas.getBoundingClientRect();
                 const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-                // Создаём луч (ray) из камеры в точку клика
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
 
-                // Проверяем пересечения ТОЛЬКО с аватарами (игнорируем пол и другие объекты)
-                const intersects = raycaster.intersectObjects(clickableObjects, true); // `true` - рекурсивный поиск
+                const intersects = raycaster.intersectObjects(clickableObjects, true);
 
                 if (intersects.length > 0) {
                     const userId = findAvatarData(intersects[0].object);
                     if (userId) {
-                        // Отправляем событие в MAUI
                         if (window.webkit?.messageHandlers?.hubbly3d) {
                             window.webkit.messageHandlers.hubbly3d.postMessage(JSON.stringify({
                                 type: 'avatar_clicked',
@@ -794,17 +735,12 @@
                         }
                         console.log(`✅ Клик по аватару: ${userId}`);
                     }
-                } else {
-                    console.log("❌ Клик не попал по аватару");
                 }
             };
 
-            // Обработчики событий
             canvas.addEventListener('click', handleClick);
-
-            // Поддержка тач-экранов
             canvas.addEventListener('touchend', (event) => {
-                if (event.touches.length === 0) { // Клик завершён
+                if (event.touches.length === 0) {
                     const touch = event.changedTouches[0];
                     const mouseEvent = new MouseEvent('click', {
                         clientX: touch.clientX,
@@ -820,10 +756,7 @@
                 return typeof THREE !== 'undefined' && scene && isInitialized;
             },
             addAvatar: function (userId, nickname, gender, isCurrentUser = false) {
-                if (!isInitialized || !avatarManager) {
-                    console.error('Cannot add avatar: scene not initialized');
-                    return false;
-                }
+                if (!isInitialized || !avatarManager) return false;
                 return avatarManager.addAvatar(userId, nickname, gender, isCurrentUser);
             },
             removeAvatar: function (userId) {
@@ -872,7 +805,9 @@
                     const canvas = document.createElement('canvas');
                     return !!(window.WebGLRenderingContext &&
                         (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
-                } catch (e) { return false; }
+                } catch (e) {
+                    return false;
+                }
             }
 
             if (!isWebGLAvailable()) {
