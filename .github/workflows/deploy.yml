@@ -41,21 +41,17 @@ jobs:
         port: ${{ secrets.SERVER_PORT }}
         key: ${{ secrets.SERVER_SSH_KEY }}
         script: |
-          # Распаковываем
-          rm -rf /opt/hubbly-publish-new
-          mkdir -p /opt/hubbly-publish-new
-          tar -xzf /opt/publish.tar.gz -C /opt/hubbly-publish-new
-          rm /opt/publish.tar.gz
-          
-          # Копируем wwwroot из старой версии
-          cp -r /opt/hubbly-publish/wwwroot /opt/hubbly-publish-new/ || true
-          
-          # Меняем местами
-          rm -rf /opt/hubbly-publish-old
-          mv /opt/hubbly-publish /opt/hubbly-publish-old || true
-          mv /opt/hubbly-publish-new /opt/hubbly-publish
-          
-          # Перезапускаем
-          systemctl restart hubbly
-          sleep 5
-          systemctl status hubbly
+              rm -rf /opt/hubbly-publish-new
+              mkdir -p /opt/hubbly-publish-new
+              tar -xzf /opt/publish.tar.gz -C /opt/hubbly-publish-new
+              rm /opt/publish.tar.gz
+              
+              cp -r /opt/hubbly-publish/wwwroot /opt/hubbly-publish-new/ || true
+              
+              rm -rf /opt/hubbly-publish-old
+              mv /opt/hubbly-publish /opt/hubbly-publish-old || true
+              mv /opt/hubbly-publish-new /opt/hubbly-publish
+              
+              systemctl restart hubbly
+              sleep 5
+              systemctl status hubbly
