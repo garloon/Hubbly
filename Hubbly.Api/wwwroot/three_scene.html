@@ -75,7 +75,7 @@
         const CONFIG = {
             SERVER_BASE_URL: "http://89.169.46.33:5000/",
             SLOT_COUNT: 10,
-            SLOT_SPACING: 2.5,
+            SLOT_SPACING: 1.5,
             CAMERA_HEIGHT: 1.1,        // Смотрим в центр аватара
             CAMERA_DISTANCE: 1.5,
             SCROLL_SENSITIVITY: 0.005,
@@ -404,6 +404,11 @@
                     avatar.loadModel();
                 }, 300 + (this.getAvatarCount() * 200));
 
+                // ✅ ВАЖНО: обновляем кликабельные объекты
+                if (window.__updateClickableObjects) {
+                    setTimeout(() => window.__updateClickableObjects(), 500);
+                }
+
                 return true;
             }
 
@@ -416,6 +421,12 @@
 
                 avatar.dispose();
                 this.avatars.delete(userId);
+
+                // ✅ ВАЖНО: обновляем кликабельные объекты
+                if (window.__updateClickableObjects) {
+                    setTimeout(() => window.__updateClickableObjects(), 100);
+                }
+
                 return true;
             }
 
@@ -485,6 +496,7 @@
                 this.isDragging = false;
                 this.startX = 0;
                 this.currentX = 0;
+                this.initialized = false;
 
                 this.setupCamera();
                 this.setupEventListeners();
@@ -589,6 +601,15 @@
                 if (!this.isDragging) {
                     this.updateCameraPosition();
                 }
+
+                if (!this.initialized && window.currentUserId) {
+                    const myAvatar = avatarManager?.getAvatar(window.currentUserId);
+                    if (myAvatar && myAvatar.slotIndex !== undefined) {
+                        this.targetX = myAvatar.slotIndex * CONFIG.SLOT_SPACING;
+                        this.initialized = true;
+                        console.log(`🎥 Camera centered on slot ${myAvatar.slotIndex}`);
+                    }
+                }
             }
         }
 
@@ -674,6 +695,7 @@
             const canvas = document.getElementById('renderCanvas');
             const clickableObjects = [];
 
+            // Функция обновления списка кликабельных объектов
             function updateClickableObjects() {
                 clickableObjects.length = 0;
                 scene.traverse(obj => {
@@ -681,8 +703,10 @@
                         clickableObjects.push(obj);
                     }
                 });
+                console.log(`🎯 Clickable objects: ${clickableObjects.length}`);
             }
 
+            // Функция поиска userId в иерархии
             function findAvatarData(obj) {
                 while (obj) {
                     if (obj.userData.avatarId) return obj.userData.avatarId;
@@ -692,21 +716,13 @@
                 return null;
             }
 
+            window.__updateClickableObjects = updateClickableObjects;
+
+            // Первое обновление
             updateClickableObjects();
 
-            const originalAddAvatar = avatarManager.addAvatar;
-            avatarManager.addAvatar = function (userId, nickname, gender, isCurrentUser) {
-                const result = originalAddAvatar.call(this, userId, nickname, gender, isCurrentUser);
-                if (result) updateClickableObjects();
-                return result;
-            };
-
-            const originalRemoveAvatar = avatarManager.removeAvatar;
-            avatarManager.removeAvatar = function (userId) {
-                const result = originalRemoveAvatar.call(this, userId);
-                if (result) updateClickableObjects();
-                return result;
-            };
+            // Периодическое обновление (на всякий случай)
+            setInterval(updateClickableObjects, 3000);
 
             let lastClickTime = 0;
             const clickDelay = 300;
@@ -758,6 +774,12 @@
             },
             addAvatar: function (userId, nickname, gender, isCurrentUser = false) {
                 if (!isInitialized || !avatarManager) return false;
+
+                if (isCurrentUser) {
+                    window.currentUserId = userId;
+                    console.log(`👑 Current user set: ${userId}`);
+                }
+
                 return avatarManager.addAvatar(userId, nickname, gender, isCurrentUser);
             },
             removeAvatar: function (userId) {
