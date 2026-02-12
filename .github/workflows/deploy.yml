@@ -32,16 +32,6 @@ jobs:
           --no-build \
           --no-restore
         
-        # ✅ ЯВНО копируем wwwroot (на всякий случай)
-        if [ -d "Hubbly.Api/wwwroot" ]; then
-          echo "Copying wwwroot files..."
-          mkdir -p ./publish/wwwroot
-          cp -r Hubbly.Api/wwwroot/* ./publish/wwwroot/
-          echo "✅ wwwroot copied"
-        else
-          echo "⚠️ wwwroot folder not found"
-        fi
-        
         # Проверяем что three_scene.html на месте
         if [ -f "./publish/wwwroot/three_scene.html" ]; then
           echo "✅ three_scene.html is present"
