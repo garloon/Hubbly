@@ -29,7 +29,6 @@
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         }
 
-        /* Индикатор загрузки */
         #loadingOverlay {
             position: fixed;
             top: 0;
@@ -64,7 +63,6 @@
     </style>
 </head>
 <body>
-    <!-- Canvas для Three.js -->
     <canvas id="renderCanvas"></canvas>
 
     <script type="module">
@@ -75,15 +73,14 @@
         const CONFIG = {
             SERVER_BASE_URL: "http://89.169.46.33:5000/",
             SLOT_COUNT: 10,
-            SLOT_SPACING: 1.5,
-            CAMERA_HEIGHT: 1.1,        // Смотрим в центр аватара
-            CAMERA_DISTANCE: 1.5,
+            SLOT_SPACING: 2.0,
+            CAMERA_DISTANCE: 2.5,
             SCROLL_SENSITIVITY: 0.005,
             HIGHLIGHT_COLOR: 0x8b5cf6,
             DEFAULT_COLOR: 0x3b82f6,
-            MODEL_SCALE: 1.0,
-            AVATAR_HEIGHT: 1.8,         // Высота аватара
-            AVATAR_CENTER_Y: 1.1,       // Центр аватара по Y
+            MODEL_SCALE: 1.8,
+            AVATAR_FOOT_Y: 0.2,
+            AVATAR_HEIGHT: 1.8,
             ANIMATIONS: {
                 idle: 'idle.glb',
                 clap: 'clapping.glb'
@@ -102,19 +99,20 @@
                 this.nickname = nickname;
                 this.gender = gender;
                 this.isCurrentUser = isCurrentUser;
-                this.mesh = null;
+                this.group = null;
                 this.mixer = null;
                 this.actions = new Map();
                 this.currentAction = null;
                 this.animationClips = new Map();
                 this.slotIndex = -1;
                 this.isLoaded = false;
-                this.usingFallback = false;
 
                 this.createPlaceholder();
             }
 
             createPlaceholder() {
+                this.group = new THREE.Group();
+
                 const geometry = new THREE.BoxGeometry(0.8, 1.8, 0.4);
                 const color = this.isCurrentUser ? CONFIG.HIGHLIGHT_COLOR : CONFIG.DEFAULT_COLOR;
                 const material = new THREE.MeshPhongMaterial({
@@ -124,22 +122,30 @@
                     opacity: 0.8
                 });
 
-                this.mesh = new THREE.Mesh(geometry, material);
-                this.mesh.userData.avatar = this;
-                this.mesh.userData.avatarId = this.userId;
-                this.mesh.userData.nickname = this.nickname;
-                this.mesh.name = `avatar_${this.userId}`;
+                const body = new THREE.Mesh(geometry, material);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                body.position.y = 0.9;
+                this.group.add(body);
 
-                // Тень
-                const shadowGeometry = new THREE.CircleGeometry(0.6, 32);
-                const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 });
-                const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+                const headGeo = new THREE.SphereGeometry(0.25);
+                const headMat = new THREE.MeshPhongMaterial({ color: 0xffdbac });
+                const head = new THREE.Mesh(headGeo, headMat);
+                head.position.y = 1.8;
+                head.castShadow = true;
+                head.receiveShadow = true;
+                this.group.add(head);
+
+                const shadowGeo = new THREE.CircleGeometry(0.6, 32);
+                const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+                const shadow = new THREE.Mesh(shadowGeo, shadowMat);
                 shadow.rotation.x = -Math.PI / 2;
-                shadow.position.y = -0.9;
-                shadow.userData.avatar = this;
-                shadow.userData.avatarId = this.userId;
-                shadow.userData.nickname = this.nickname;
-                this.mesh.add(shadow);
+                shadow.position.y = 0.01;
+                this.group.add(shadow);
+
+                this.group.userData.avatarId = this.userId;
+                this.group.userData.nickname = this.nickname;
+                this.group.userData.isCurrentUser = this.isCurrentUser;
             }
 
             disposeMesh(mesh) {
@@ -160,49 +166,29 @@
             async loadModel() {
                 if (this.isLoaded) return;
 
-                const parent = this.mesh.parent;
-                const currentX = this.mesh.position.x;
+                const parent = this.group.parent;
+                const currentX = this.group.position.x;
 
                 try {
-                    const newMesh = await this.loadGLBModel();
-                    this.usingFallback = false;
+                    const newModel = await this.loadGLBModel();
 
-                    if (newMesh) {
-                        if (this.mesh && parent) {
-                            parent.remove(this.mesh);
-                            this.disposeMesh(this.mesh);
+                    if (newModel) {
+                        if (this.group && parent) {
+                            parent.remove(this.group);
                         }
 
-                        this.mesh = newMesh;
+                        this.group = newModel;
+                        this.group.position.set(currentX, CONFIG.AVATAR_FOOT_Y, 0);
+                        this.group.scale.set(CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE);
 
-                        // ✅ СНАЧАЛА ставим позицию
-                        this.mesh.position.set(currentX, 0.2, 0);
-                        console.log(`[POSITION] После set:`, this.mesh.position.clone());
+                        this.group.userData.avatarId = this.userId;
+                        this.group.userData.nickname = this.nickname;
+                        this.group.userData.isCurrentUser = this.isCurrentUser;
 
-                        // ✅ Проставляем userData
-                        this.mesh.userData.avatar = this;
-                        this.mesh.userData.avatarId = this.userId;
-                        this.mesh.userData.nickname = this.nickname;
-
-                        this.mesh.traverse((child) => {
-                            if (child.isMesh) {
-                                child.userData.avatar = this;
-                                child.userData.avatarId = this.userId;
-                                child.userData.nickname = this.nickname;
-                                child.visible = true;
-
-                                // ✅ Логируем позиции детей
-                                console.log(`[CHILD] ${child.name || 'mesh'} position:`, child.position.clone());
-                            }
-                        });
-
-                        // ✅ ФИНАЛЬНАЯ ПОЗИЦИЯ
-                        console.log(`[FINAL] mesh position:`, this.mesh.position.clone());
-
-                        this.mixer = new THREE.AnimationMixer(this.mesh);
+                        this.mixer = new THREE.AnimationMixer(this.group);
 
                         if (parent) {
-                            parent.add(this.mesh);
+                            parent.add(this.group);
                         }
 
                         await this.loadAndPlayIdleAnimation();
@@ -211,123 +197,85 @@
                     this.isLoaded = true;
 
                 } catch (error) {
-                    console.error(`[FATAL MODEL] Failed to process model for ${this.nickname}:`, error);
+                    console.error(`[MODEL] Failed to load model for ${this.nickname}:`, error);
                     this.isLoaded = true;
                 }
             }
 
             loadGLBModel() {
                 return new Promise((resolve, reject) => {
-                    let modelPath;
+                    let modelPath = this.gender === 'male'
+                        ? `${CONFIG.SERVER_BASE_URL}avatars/male_base.glb`
+                        : `${CONFIG.SERVER_BASE_URL}avatars/female_base.glb`;
 
-                    if (this.gender === 'male') {
-                        modelPath = `${CONFIG.SERVER_BASE_URL}avatars/male_base.glb`;
-                    } else if (this.gender === 'female') {
-                        modelPath = `${CONFIG.SERVER_BASE_URL}avatars/female_base.glb`;
-                    } else {
-                        return reject(new Error("Unknown gender specified."));
-                    }
+                    new GLTFLoader().load(modelPath,
+                        (gltf) => {
+                            const model = gltf.scene;
+                            model.name = `glb_avatar_${this.userId}`;
 
-                    const loader = new GLTFLoader();
+                            model.traverse((child) => {
+                                if (child.isMesh) {
+                                    child.castShadow = true;
+                                    child.receiveShadow = true;
+                                }
+                            });
 
-                    const onLoad = (gltf) => {
-                        const model = gltf.scene;
-                        model.scale.set(5, 5, 5);
-                        model.name = `glb_avatar_${this.userId}`;
-
-                        model.traverse((child) => {
-                            if (child.isMesh && child.material) {
-                                child.castShadow = true;
-                                child.receiveShadow = true;
-                                child.material.transparent = true;
-                                child.material.opacity = 0;
-                                new TWEEN.Tween(child.material)
-                                    .to({ opacity: 1 }, 500)
-                                    .delay(100)
-                                    .start();
-                            }
-                        });
-
-                        resolve(model);
-                    };
-
-                    const onError = (error) => {
-                        console.error('[MODEL] GLTFLoader ERROR:', error);
-                        reject(error);
-                    };
-
-                    loader.load(modelPath, onLoad, null, onError);
+                            resolve(model);
+                        },
+                        null,
+                        (error) => reject(error)
+                    );
                 });
             }
 
             async loadAndPlayIdleAnimation() {
                 try {
                     const idleAnimation = await this.loadAnimation('idle');
-
                     if (idleAnimation) {
-                        this.animationClips.set('idle', idleAnimation);
                         const action = this.mixer.clipAction(idleAnimation);
                         this.actions.set('idle', action);
-                        this.playAnimation('idle', true, 0.5);
+                        action.play();
                     }
                 } catch (error) {
-                    console.warn(`[ANIM] Could not load idle animation for ${this.nickname}:`, error.message);
+                    console.warn(`[ANIM] Could not load idle animation:`, error.message);
                 }
             }
 
             async loadAnimation(animationName) {
                 return new Promise((resolve, reject) => {
-                    let animationPath;
+                    let animationPath = this.gender === 'male'
+                        ? `${CONFIG.SERVER_BASE_URL}animations/male_${CONFIG.ANIMATIONS[animationName]}`
+                        : `${CONFIG.SERVER_BASE_URL}animations/female_${CONFIG.ANIMATIONS[animationName]}`;
 
-                    if (this.gender === 'male') {
-                        animationPath = `${CONFIG.SERVER_BASE_URL}animations/male_${CONFIG.ANIMATIONS[animationName]}`;
-                    } else if (this.gender === 'female') {
-                        animationPath = `${CONFIG.SERVER_BASE_URL}animations/female_${CONFIG.ANIMATIONS[animationName]}`;
-                    } else {
-                        return reject(new Error("Unknown gender for animation"));
-                    }
-
-                    const loader = new GLTFLoader();
-
-                    const onLoad = (gltf) => {
-                        if (gltf.animations && gltf.animations.length > 0) {
-                            const animation = gltf.animations[0];
-                            animation.name = animationName;
-                            resolve(animation);
-                        } else {
-                            reject(new Error(`No animations found in ${animationPath}`));
-                        }
-                    };
-
-                    const onError = (error) => {
-                        console.error(`[ANIM] Failed to load animation "${animationName}":`, error);
-                        reject(error);
-                    };
-
-                    loader.load(animationPath, onLoad, null, onError);
+                    new GLTFLoader().load(animationPath,
+                        (gltf) => {
+                            if (gltf.animations?.length > 0) {
+                                resolve(gltf.animations[0]);
+                            } else {
+                                reject(new Error('No animations found'));
+                            }
+                        },
+                        null,
+                        (error) => reject(error)
+                    );
                 });
             }
 
-            async playAnimation(animationName, loop = true, fadeDuration = 0.3) {
+            async playAnimation(animationName, loop = false, fadeDuration = 0.3) {
                 if (!this.actions.has(animationName)) {
                     try {
-                        const animationClip = await this.loadAnimation(animationName);
-                        if (animationClip) {
-                            this.animationClips.set(animationName, animationClip);
-                            const action = this.mixer.clipAction(animationClip);
+                        const clip = await this.loadAnimation(animationName);
+                        if (clip) {
+                            const action = this.mixer.clipAction(clip);
                             this.actions.set(animationName, action);
                         }
                     } catch (error) {
-                        console.warn(`[ANIM] Failed to load animation "${animationName}" for ${this.nickname}:`, error);
                         return false;
                     }
                 }
 
                 const action = this.actions.get(animationName);
-                if (!action) {
-                    console.warn(`[ANIM] Animation "${animationName}" not found for ${this.nickname}`);
-                    return false;
-                }
+                if (!action) return false;
 
                 if (this.currentAction) {
                     this.currentAction.fadeOut(fadeDuration);
@@ -342,28 +290,15 @@
                 return true;
             }
 
-            stopAnimation(fadeDuration = 0.3) {
-                if (this.currentAction) {
-                    this.currentAction.fadeOut(fadeDuration);
-                    this.currentAction = null;
-                }
-            }
-
             setSlot(index) {
                 this.slotIndex = index;
                 this.updatePosition();
             }
 
             updatePosition() {
-                if (this.slotIndex < 0 || !this.mesh) return;
+                if (this.slotIndex < 0 || !this.group) return;
                 const xPos = this.slotIndex * CONFIG.SLOT_SPACING;
-
-                if (this.isLoaded && !this.usingFallback) {
-                    // ✅ GLB: pivot в ногах - ставим ноги на 0.2
-                    this.mesh.position.set(xPos, 0.2, 0);
-                } else {
-                    this.mesh.position.set(xPos, CONFIG.AVATAR_CENTER_Y, 0);
-                }
+                this.group.position.set(xPos, CONFIG.AVATAR_FOOT_Y, 0);
             }
 
             update(deltaTime) {
@@ -377,18 +312,14 @@
                     this.mixer.stopAllAction();
                     this.mixer = null;
                 }
-
                 this.actions.clear();
                 this.animationClips.clear();
                 this.currentAction = null;
 
-                if (this.mesh) {
-                    if (this.mesh.parent) {
-                        this.mesh.parent.remove(this.mesh);
-                    }
-                    this.disposeMesh(this.mesh);
+                if (this.group && this.group.parent) {
+                    this.group.parent.remove(this.group);
                 }
-                this.mesh = null;
+                this.group = null;
             }
         }
 
@@ -414,13 +345,10 @@
                 avatar.setSlot(slotIndex);
 
                 this.avatars.set(userId, avatar);
-                scene.add(avatar.mesh);
+                scene.add(avatar.group);
 
-                setTimeout(() => {
-                    avatar.loadModel();
-                }, 300 + (this.getAvatarCount() * 200));
+                setTimeout(() => avatar.loadModel(), 300 + (this.getAvatarCount() * 200));
 
-                // ✅ ВАЖНО: обновляем кликабельные объекты
                 if (window.__updateClickableObjects) {
                     setTimeout(() => window.__updateClickableObjects(), 500);
                 }
@@ -438,7 +366,6 @@
                 avatar.dispose();
                 this.avatars.delete(userId);
 
-                // ✅ ВАЖНО: обновляем кликабельные объекты
                 if (window.__updateClickableObjects) {
                     setTimeout(() => window.__updateClickableObjects(), 100);
                 }
@@ -446,62 +373,22 @@
                 return true;
             }
 
-            getAvatarCount() {
-                return this.avatars.size;
-            }
-
-            getAvatar(userId) {
-                return this.avatars.get(userId);
-            }
-
-            getAvatars() {
-                return Array.from(this.avatars.values());
-            }
+            getAvatarCount() { return this.avatars.size; }
+            getAvatar(userId) { return this.avatars.get(userId); }
+            getAvatars() { return Array.from(this.avatars.values()); }
 
             clearAll() {
-                for (const avatar of this.avatars.values()) {
-                    avatar.dispose();
-                }
+                for (const avatar of this.avatars.values()) avatar.dispose();
                 this.avatars.clear();
                 this.availableSlots = Array.from({ length: CONFIG.SLOT_COUNT }, (_, i) => i);
             }
 
             updateAvatars(deltaTime) {
-                for (const avatar of this.avatars.values()) {
-                    avatar.update(deltaTime);
-                }
+                for (const avatar of this.avatars.values()) avatar.update(deltaTime);
             }
 
             playAvatarAnimation(userId, animationName = 'idle', loop = true) {
-                const avatar = this.avatars.get(userId);
-                if (!avatar) return false;
-                return avatar.playAnimation(animationName, loop);
-            }
-
-            stopAvatarAnimation(userId) {
-                const avatar = this.avatars.get(userId);
-                if (!avatar) return false;
-                avatar.stopAnimation();
-                return true;
-            }
-
-            playAllAnimation(animationName = 'idle', loop = true) {
-                let successCount = 0;
-                for (const avatar of this.avatars.values()) {
-                    if (avatar.playAnimation(animationName, loop)) {
-                        successCount++;
-                    }
-                }
-                return successCount;
-            }
-
-            stopAllAnimations() {
-                let successCount = 0;
-                for (const avatar of this.avatars.values()) {
-                    avatar.stopAnimation();
-                    successCount++;
-                }
-                return successCount;
+                return this.avatars.get(userId)?.playAnimation(animationName, loop) || false;
             }
         }
 
@@ -520,10 +407,7 @@
 
             setupCamera() {
                 const aspect = window.innerWidth / window.innerHeight;
-
-                // ✅ Расчёт фрустума: аватар высотой 1.8 занимает 75% экрана
-                // frustumSize = высота_аватара / желаемый_процент = 1.8 / 0.75 = 2.4
-                const frustumSize = 2.4;
+                const frustumSize = 3.5;
 
                 this.camera.left = -frustumSize * aspect / 2;
                 this.camera.right = frustumSize * aspect / 2;
@@ -533,9 +417,8 @@
                 this.camera.far = 1000;
                 this.camera.updateProjectionMatrix();
 
-                // ✅ Смотрим в центр аватара (Y = 1.1)
-                this.camera.position.set(0, CONFIG.AVATAR_CENTER_Y, CONFIG.CAMERA_DISTANCE);
-                this.camera.lookAt(0, CONFIG.AVATAR_CENTER_Y, 0);
+                this.camera.position.set(0, 1.1, CONFIG.CAMERA_DISTANCE);
+                this.camera.lookAt(0, 1.1, 0);
             }
 
             setupEventListeners() {
@@ -595,9 +478,7 @@
 
             onWindowResize() {
                 this.setupCamera();
-                if (renderer) {
-                    renderer.setSize(window.innerWidth, window.innerHeight);
-                }
+                renderer?.setSize(window.innerWidth, window.innerHeight);
             }
 
             updateCameraPosition() {
@@ -614,16 +495,13 @@
             }
 
             update() {
-                if (!this.isDragging) {
-                    this.updateCameraPosition();
-                }
+                if (!this.isDragging) this.updateCameraPosition();
 
                 if (!this.initialized && window.currentUserId) {
                     const myAvatar = avatarManager?.getAvatar(window.currentUserId);
-                    if (myAvatar && myAvatar.slotIndex !== undefined) {
+                    if (myAvatar?.slotIndex !== undefined) {
                         this.targetX = myAvatar.slotIndex * CONFIG.SLOT_SPACING;
                         this.initialized = true;
-                        console.log(`🎥 Camera centered on slot ${myAvatar.slotIndex}`);
                     }
                 }
             }
@@ -637,7 +515,7 @@
 
             const canvas = document.getElementById('renderCanvas');
             renderer = new THREE.WebGLRenderer({
-                canvas: canvas,
+                canvas,
                 antialias: true,
                 powerPreference: "high-performance"
             });
@@ -650,24 +528,12 @@
             setupLighting();
             avatarManager = new AvatarManager();
             cameraController = new CameraController(camera);
-
-            // ✅ Удаляем statusBar полностью
-            const existingStatusBar = document.getElementById('statusBar');
-            if (existingStatusBar) {
-                existingStatusBar.remove();
-            }
-
             setupRaycaster();
 
             setTimeout(() => {
                 isInitialized = true;
-                console.log('✅ Three.js initialized successfully');
-
-                // Убираем loadingOverlay
                 const overlay = document.getElementById('loadingOverlay');
-                if (overlay) {
-                    overlay.style.display = 'none';
-                }
+                if (overlay) overlay.style.display = 'none';
             }, 1000);
         }
 
@@ -683,9 +549,6 @@
             directionalLight.shadow.camera.near = 0.5;
             directionalLight.shadow.camera.far = 50;
             scene.add(directionalLight);
-
-            // Пол убираем совсем — тени падают на невидимую плоскость
-            // или можно оставить прозрачный пол для теней
         }
 
         function animate() {
@@ -694,49 +557,29 @@
 
             const deltaTime = clock.getDelta();
 
-            if (avatarManager) {
-                avatarManager.updateAvatars(deltaTime);
-            }
-
-            if (cameraController) {
-                cameraController.update();
-            }
-
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
-            }
+            if (avatarManager) avatarManager.updateAvatars(deltaTime);
+            if (cameraController) cameraController.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
         }
 
-        let handleClick;
-        let clickableObjects = [];
         let lastClickTime = 0;
         const clickDelay = 300;
 
         function setupRaycaster() {
             const canvas = document.getElementById('renderCanvas');
 
-            function updateClickableObjects() {
-                window.clickableObjects.length = 0;
+            window.__updateClickableObjects = function () {
+                window.clickableObjects = [];
                 scene.traverse(obj => {
-                    if (obj.isMesh && obj.userData.avatarId) {
+                    if (obj.userData?.avatarId && obj.isObject3D) {
                         window.clickableObjects.push(obj);
                     }
                 });
-            }
+            };
 
-            function findAvatarData(obj) {
-                while (obj) {
-                    if (obj.userData.avatarId) return obj.userData.avatarId;
-                    if (obj.userData.avatar?.userId) return obj.userData.avatar.userId;
-                    obj = obj.parent;
-                }
-                return null;
-            }
-
-            window.__updateClickableObjects = updateClickableObjects;
             window.clickableObjects = [];
-            updateClickableObjects();
-            setInterval(updateClickableObjects, 3000);
+            window.__updateClickableObjects();
+            setInterval(window.__updateClickableObjects, 3000);
 
             window.handleClick = function (event) {
                 const currentTime = Date.now();
@@ -745,49 +588,25 @@
 
                 const rect = canvas.getBoundingClientRect();
                 const mouse = new THREE.Vector2();
-
-                // Нормализуем координаты относительно canvas, а не окна!
                 mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-                console.log(`🎯 Mouse normalized:`, mouse.x, mouse.y);
-
-                // 2. Для OrthographicCamera: луч идет ПАРАЛЛЕЛЬНО из точки клика
                 const raycaster = new THREE.Raycaster();
-
-                // Устанавливаем луч из координат мыши в мировом пространстве
                 raycaster.setFromCamera(mouse, camera);
-
-                // 🔥🔥🔥 КРИТИЧЕСКИ ВАЖНО: ОБНОВЛЯЕМ МАТРИЦУ КАМЕРЫ!
                 camera.updateMatrixWorld(true);
 
-                // 3. Визуализация
-                const arrow = new THREE.ArrowHelper(
-                    raycaster.ray.direction,
-                    raycaster.ray.origin,
-                    10,
-                    0xff0000
-                );
-                scene.add(arrow);
-                setTimeout(() => scene.remove(arrow), 500);
-
-                // 4. Проверяем пересечения
                 const intersects = raycaster.intersectObjects(window.clickableObjects, true);
-                console.log(`🎯 Intersects: ${intersects.length}`);
 
                 if (intersects.length > 0) {
-                    const userId = findAvatarData(intersects[0].object);
-                    if (userId) {
-                        console.log(`✅ Клик по аватару: ${userId}`);
+                    let obj = intersects[0].object;
+                    while (obj && !obj.userData?.avatarId) obj = obj.parent;
 
-                        const message = JSON.stringify({
-                            type: 'avatar_clicked',
-                            userId: userId
-                        });
-
+                    if (obj?.userData?.avatarId) {
                         if (window.hubblyBridge) {
-                            window.hubblyBridge.postMessage(message);
-                            console.log('✅ Sent via hubblyBridge');
+                            window.hubblyBridge.postMessage(JSON.stringify({
+                                type: 'avatar_clicked',
+                                userId: obj.userData.avatarId
+                            }));
                         }
                     }
                 }
@@ -804,158 +623,57 @@
                     window.handleClick(mouseEvent);
                 }
             });
-
-            window.debugRaycast = function (x, y) {
-                if (!canvas) canvas = document.getElementById('renderCanvas');
-
-                const rect = canvas.getBoundingClientRect();
-                const mouse = new THREE.Vector2();
-                mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
-                mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
-
-                const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(mouse, camera);
-                camera.updateMatrixWorld(true);
-
-                console.log('========== ДЕБАГ РЕЖИМ ==========');
-                console.log('1. Координаты мыши:', x, y);
-                console.log('2. Mouse normalized:', mouse.x, mouse.y);
-                console.log('3. Camera position:', camera.position.clone());
-                console.log('4. Camera matrix:', camera.matrixWorld.clone());
-                console.log('5. Ray origin:', raycaster.ray.origin.clone());
-                console.log('6. Ray direction:', raycaster.ray.direction.clone());
-
-                // Визуализация
-                const arrow = new THREE.ArrowHelper(
-                    raycaster.ray.direction,
-                    raycaster.ray.origin,
-                    10,
-                    0xff0000
-                );
-                scene.add(arrow);
-                setTimeout(() => scene.remove(arrow), 3000);
-
-                // Информация об аватарах
-                console.log('7. Всего аватаров:', avatarManager?.getAvatars().length);
-                window.clickableObjects.forEach((obj, i) => {
-                    const worldPos = obj.getWorldPosition(new THREE.Vector3());
-                    const box = new THREE.Box3().setFromObject(obj);
-                    console.log(`   Аватар ${i}:`, {
-                        id: obj.userData.avatarId,
-                        localPos: obj.position.clone(),
-                        worldPos: worldPos,
-                        boundingBox: box,
-                        bounds: {
-                            min: box.min.clone(),
-                            max: box.max.clone()
-                        }
-                    });
-                });
-
-                // Проверка пересечений
-                const intersects = raycaster.intersectObjects(window.clickableObjects, true);
-                console.log('8. Пересечений:', intersects.length);
-
-                if (intersects.length > 0) {
-                    console.log('9. Первое пересечение:', {
-                        distance: intersects[0].distance,
-                        point: intersects[0].point.clone(),
-                        object: intersects[0].object.userData.avatarId
-                    });
-                } else {
-                    // Проверяем пересечение с плоскостью на разных высотах
-                    [0, 0.2, 0.5, 1.1, 1.5, 2.0].forEach(y => {
-                        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
-                        const point = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(plane, point)) {
-                            console.log(`   Пересечение с плоскостью Y=${y}:`, point.clone());
-                        }
-                    });
-                }
-                console.log('================================');
-            };
-
-            // Для удобства - клик по координатам
-            window.clickAt = function (x, y) {
-                window.debugRaycast(x, y);
-            };
-
-            console.log('✅ Raycaster setup complete');
         }
 
         window.hubbly3d = {
-            isReady: function () {
-                return typeof THREE !== 'undefined' && scene && isInitialized;
-            },
+            isReady: () => isInitialized && !!scene,
+
             addAvatar: function (userId, nickname, gender, isCurrentUser = false) {
                 if (!isInitialized || !avatarManager) return false;
 
                 if (isCurrentUser && window.currentUserId === userId) {
-                    console.log(`⏭️ Skipping duplicate self avatar: ${userId}`);
                     return true;
                 }
 
                 if (isCurrentUser) {
                     window.currentUserId = userId;
-                    console.log(`👑 Current user set: ${userId}`);
                 }
 
                 return avatarManager.addAvatar(userId, nickname, gender, isCurrentUser);
             },
+
             removeAvatar: function (userId) {
-                if (!isInitialized || !avatarManager) return false;
-                return avatarManager.removeAvatar(userId);
+                return avatarManager?.removeAvatar(userId) || false;
             },
+
             clearAvatars: function () {
-                if (!isInitialized || !avatarManager) return false;
-                avatarManager.clearAll();
+                avatarManager?.clearAll();
                 return true;
             },
-            getAvatarCount: function () {
-                if (!avatarManager) return 0;
-                return avatarManager.getAvatarCount();
-            },
-            getAvatars: function () {
-                if (!avatarManager) return [];
-                return avatarManager.getAvatars().map(a => ({
-                    userId: a.userId,
-                    nickname: a.nickname,
-                    gender: a.gender,
-                    isLoaded: a.isLoaded
-                }));
-            },
-            playAnimation: function (userId, animationName = 'idle', loop = true) {
-                if (!avatarManager) return false;
-                return avatarManager.playAvatarAnimation(userId, animationName, loop);
-            },
-            stopAnimation: function (userId) {
-                if (!avatarManager) return false;
-                return avatarManager.stopAvatarAnimation(userId);
-            },
-            playAllAnimation: function (animationName = 'idle', loop = true) {
-                if (!avatarManager) return 0;
-                return avatarManager.playAllAnimation(animationName, loop);
-            },
-            stopAllAnimations: function () {
-                if (!avatarManager) return 0;
-                return avatarManager.stopAllAnimations();
-            }
+
+            getAvatarCount: () => avatarManager?.getAvatarCount() || 0,
+
+            getAvatars: () => avatarManager?.getAvatars().map(a => ({
+                userId: a.userId,
+                nickname: a.nickname,
+                gender: a.gender,
+                isLoaded: a.isLoaded
+            })) || [],
+
+            playAnimation: (userId, animationName = 'idle', loop = true) =>
+                avatarManager?.playAvatarAnimation(userId, animationName, loop) || false
         };
 
-        document.addEventListener('DOMContentLoaded', function () {
-            function isWebGLAvailable() {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!(() => {
                 try {
                     const canvas = document.createElement('canvas');
                     return !!(window.WebGLRenderingContext &&
                         (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
-                } catch (e) {
-                    return false;
-                }
-            }
-
-            if (!isWebGLAvailable()) {
+                } catch { return false; }
+            })()) {
                 document.getElementById('loadingOverlay').innerHTML =
-                    '<div style="color: #ef4444; text-align: center; padding: 20px;">WebGL Not Supported</div>';
+                    '<div style="color: #ef4444;">WebGL Not Supported</div>';
                 return;
             }
 
