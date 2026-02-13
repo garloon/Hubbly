@@ -364,6 +364,7 @@ public class ChatHub : Hub
                 await Clients.OthersInGroup(room.Id.ToString()).SendAsync("UserLeft", new UserLeftData
                 {
                     UserId = userId.ToString(),
+                    Nickname = disconnectedUser?.Nickname ?? "User",
                     LeftAt = DateTimeOffset.UtcNow
                 });
 

@@ -28,6 +28,7 @@ public class UserJoinedData
 public class UserLeftData
 {
     public string UserId { get; set; } = string.Empty;
+    public string Nickname { get; set; } = string.Empty;
     public DateTimeOffset LeftAt { get; set; }
 }
 
