@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Hubs\ChatHub.MessageHandlers.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
     <PackageReference Include="AspNetCore.HealthChecks.Uris" Version="8.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.23" />
@@ -30,10 +26,6 @@
   <ItemGroup>
     <Folder Include="wwwroot\avatars\" />
     <Folder Include="wwwroot\animations\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Hubs\ChatHub.MessageHandlers.cs" />
   </ItemGroup>
 
 </Project>
