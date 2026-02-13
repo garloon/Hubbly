@@ -92,6 +92,7 @@
         let cameraController;
         let isInitialized = false;
         let clock = new THREE.Clock();
+        let updateInterval = null;
 
         class Avatar {
             constructor(userId, nickname, gender, isCurrentUser = false) {
@@ -150,22 +151,27 @@
                     color: 0x00ff00,
                     wireframe: true,
                     transparent: true,
-                    opacity: 0.3 // В проде 0, для отладки поставь 0.3
+                    opacity: 0.3
                 });
 
-
                 this.collider = new THREE.Mesh(boxGeo, boxMat);
-                this.collider.position.y = 0.9; // Центр куба
-                this.collider.userData.avatarId = this.userId;
-                this.collider.userData.nickname = this.nickname;
-                this.collider.userData.isCurrentUser = this.isCurrentUser;
-                this.collider.userData.isCollider = true;
+                this.collider.position.y = 0.9;
+
+                // ВАЖНО: устанавливаем userData ДО добавления в группу
+                this.collider.userData = {
+                    avatarId: this.userId,
+                    nickname: this.nickname,
+                    isCurrentUser: this.isCurrentUser,
+                    isCollider: true
+                };
 
                 this.group.add(this.collider);
 
-                this.group.userData.avatarId = this.userId;
-                this.group.userData.nickname = this.nickname;
-                this.group.userData.isCurrentUser = this.isCurrentUser;
+                this.group.userData = {
+                    avatarId: this.userId,
+                    nickname: this.nickname,
+                    isCurrentUser: this.isCurrentUser
+                };
             }
 
             disposeMesh(mesh) {
@@ -186,16 +192,16 @@
             async loadModel() {
                 if (this.isLoaded) return;
 
-                const parent = this.group.parent;
-                const currentX = this.group.position.x;
+                // Сохраняем ссылки до начала операций
+                const parent = this.group ? this.group.parent : null;
+                const currentX = this.group ? this.group.position.x : 0;
+                const oldCollider = this.collider;
 
                 try {
                     const newModel = await this.loadGLBModel();
 
                     if (newModel) {
-                        // Сохраняем коллайдер
-                        const oldCollider = this.collider;
-
+                        // Если есть старая группа и родитель
                         if (this.group && parent) {
                             parent.remove(this.group);
                         }
@@ -204,25 +210,32 @@
                         this.group.position.set(currentX, CONFIG.AVATAR_FOOT_Y, 0);
                         this.group.scale.set(CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE);
 
-                        // 🔥 ДОБАВЛЯЕМ КОЛЛАЙДЕР К ЗАГРУЖЕННОЙ МОДЕЛИ
+                        // Восстанавливаем коллайдер
                         if (oldCollider) {
-                            // Удаляем коллайдер из старой группы
-                            oldCollider.removeFromParent();
+                            // Удаляем из старого родителя если есть
+                            if (oldCollider.parent) {
+                                oldCollider.parent.remove(oldCollider);
+                            }
 
                             // Обновляем userData
-                            oldCollider.userData.avatarId = this.userId;
-                            oldCollider.userData.nickname = this.nickname;
-                            oldCollider.userData.isCurrentUser = this.isCurrentUser;
-                            oldCollider.userData.isCollider = true;
+                            oldCollider.userData = {
+                                avatarId: this.userId,
+                                nickname: this.nickname,
+                                isCurrentUser: this.isCurrentUser,
+                                isCollider: true
+                            };
 
                             // Добавляем в новую группу
                             this.group.add(oldCollider);
                             this.collider = oldCollider;
                         }
 
-                        this.group.userData.avatarId = this.userId;
-                        this.group.userData.nickname = this.nickname;
-                        this.group.userData.isCurrentUser = this.isCurrentUser;
+                        // Обновляем userData группы
+                        this.group.userData = {
+                            avatarId: this.userId,
+                            nickname: this.nickname,
+                            isCurrentUser: this.isCurrentUser
+                        };
 
                         this.mixer = new THREE.AnimationMixer(this.group);
 
@@ -270,7 +283,7 @@
             async loadAndPlayIdleAnimation() {
                 try {
                     const idleAnimation = await this.loadAnimation('idle');
-                    if (idleAnimation) {
+                    if (idleAnimation && this.mixer) {
                         const action = this.mixer.clipAction(idleAnimation);
                         this.actions.set('idle', action);
                         action.play();
@@ -301,6 +314,8 @@
             }
 
             async playAnimation(animationName, loop = false, fadeDuration = 0.3) {
+                if (!this.mixer) return false;
+
                 if (!this.actions.has(animationName)) {
                     try {
                         const clip = await this.loadAnimation(animationName);
@@ -336,7 +351,7 @@
 
             updatePosition() {
                 if (this.slotIndex < 0 || !this.group) return;
-                const xPos = this.slotIndex * CONFIG.SLOT_SPACING;
+                const xPos = (this.slotIndex - (CONFIG.SLOT_COUNT - 1) / 2) * CONFIG.SLOT_SPACING;
                 this.group.position.set(xPos, CONFIG.AVATAR_FOOT_Y, 0);
             }
 
@@ -349,15 +364,34 @@
             dispose() {
                 if (this.mixer) {
                     this.mixer.stopAllAction();
+                    if (this.group) {
+                        this.mixer.uncacheRoot(this.group);
+                    }
                     this.mixer = null;
                 }
+
                 this.actions.clear();
                 this.animationClips.clear();
                 this.currentAction = null;
 
-                if (this.group && this.group.parent) {
-                    this.group.parent.remove(this.group);
+                if (this.group) {
+                    // Очищаем геометрию и материалы
+                    this.group.traverse((obj) => {
+                        if (obj.geometry) obj.geometry.dispose();
+                        if (obj.material) {
+                            if (Array.isArray(obj.material)) {
+                                obj.material.forEach(m => m.dispose());
+                            } else {
+                                obj.material.dispose();
+                            }
+                        }
+                    });
+
+                    if (this.group.parent) {
+                        this.group.parent.remove(this.group);
+                    }
                 }
+
                 this.group = null;
                 this.collider = null;
             }
@@ -424,11 +458,16 @@
             }
 
             updateAvatars(deltaTime) {
-                for (const avatar of this.avatars.values()) avatar.update(deltaTime);
+                for (const avatar of this.avatars.values()) {
+                    if (avatar && typeof avatar.update === 'function') {
+                        avatar.update(deltaTime);
+                    }
+                }
             }
 
             playAvatarAnimation(userId, animationName = 'idle', loop = true) {
-                return this.avatars.get(userId)?.playAnimation(animationName, loop) || false;
+                const avatar = this.avatars.get(userId);
+                return avatar ? avatar.playAnimation(animationName, loop) : false;
             }
         }
 
@@ -518,7 +557,9 @@
 
             onWindowResize() {
                 this.setupCamera();
-                renderer?.setSize(window.innerWidth, window.innerHeight);
+                if (renderer) {
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                }
             }
 
             updateCameraPosition() {
@@ -540,7 +581,7 @@
                 if (!this.initialized && window.currentUserId) {
                     const myAvatar = avatarManager?.getAvatar(window.currentUserId);
                     if (myAvatar?.slotIndex !== undefined) {
-                        this.targetX = myAvatar.slotIndex * CONFIG.SLOT_SPACING;
+                        this.targetX = (myAvatar.slotIndex - (CONFIG.SLOT_COUNT - 1) / 2) * CONFIG.SLOT_SPACING;
                         this.initialized = true;
                     }
                 }
@@ -608,12 +649,12 @@
         function setupRaycaster() {
             const canvas = document.getElementById('renderCanvas');
 
-            // 🔥 ОБНОВЛЯЕМ ТОЛЬКО КОЛЛАЙДЕРЫ
             window.__updateClickableObjects = function () {
+                if (!scene) return;
+
                 window.clickableObjects = [];
                 scene.traverse(obj => {
-                    // Берем только коллайдеры
-                    if (obj.userData?.isCollider) {
+                    if (obj.userData && obj.userData.isCollider === true) {
                         window.clickableObjects.push(obj);
                     }
                 });
@@ -621,8 +662,22 @@
             };
 
             window.clickableObjects = [];
-            window.__updateClickableObjects();
-            setInterval(window.__updateClickableObjects, 3000);
+
+            setTimeout(() => {
+                if (scene) {
+                    window.__updateClickableObjects();
+                }
+            }, 1000);
+
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+
+            updateInterval = setInterval(() => {
+                if (scene) {
+                    window.__updateClickableObjects();
+                }
+            }, 3000);
 
             window.handleClick = function (event) {
                 const currentTime = Date.now();
@@ -638,11 +693,9 @@
                 raycaster.setFromCamera(mouse, camera);
                 camera.updateMatrixWorld(true);
 
-                // 🔥 РЕЙКАСТ ТОЛЬКО ПО КОЛЛАЙДЕРАМ
                 const intersects = raycaster.intersectObjects(window.clickableObjects, true);
 
                 if (intersects.length > 0) {
-                    // Находим корневой объект с avatarId
                     let obj = intersects[0].object;
                     while (obj && !obj.userData?.avatarId) {
                         obj = obj.parent;
@@ -651,11 +704,15 @@
                     if (obj?.userData?.avatarId) {
                         console.log('✅ HIT! Avatar ID:', obj.userData.avatarId);
 
-                        if (window.hubblyBridge) {
-                            window.hubblyBridge.postMessage(JSON.stringify({
-                                type: 'avatar_clicked',
-                                userId: obj.userData.avatarId
-                            }));
+                        try {
+                            if (window.hubblyBridge && typeof window.hubblyBridge.postMessage === 'function') {
+                                window.hubblyBridge.postMessage(JSON.stringify({
+                                    type: 'avatar_clicked',
+                                    userId: obj.userData.avatarId
+                                }));
+                            }
+                        } catch (e) {
+                            console.error('Bridge communication failed:', e);
                         }
                     }
                 }
@@ -710,7 +767,15 @@
             })) || [],
 
             playAnimation: (userId, animationName = 'idle', loop = true) =>
-                avatarManager?.playAvatarAnimation(userId, animationName, loop) || false
+                avatarManager?.playAvatarAnimation(userId, animationName, loop) || false,
+
+            cleanup: function () {
+                if (updateInterval) {
+                    clearInterval(updateInterval);
+                    updateInterval = null;
+                }
+                avatarManager?.clearAll();
+            }
         };
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -728,6 +793,20 @@
 
             initThreeJS();
             animate();
+        });
+
+        // Обработка потери WebGL контекста
+        const canvas = document.getElementById('renderCanvas');
+        canvas.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.log('WebGL context lost');
+            setTimeout(() => {
+                if (renderer) {
+                    renderer.forceContextLoss();
+                    renderer.dispose();
+                }
+                initThreeJS();
+            }, 100);
         });
     </script>
 </body>
