@@ -78,7 +78,7 @@
             HIGHLIGHT_COLOR: 0x8b5cf6,
             DEFAULT_COLOR: 0x3b82f6,
             MODEL_SCALE: 1.8,
-            AVATAR_FOOT_Y: 0.0,
+            AVATAR_FOOT_Y: -0.4,
             VISIBLE_RANGE: 3,
             ANIMATIONS: {
                 idle: 'idle.glb',
@@ -490,7 +490,7 @@
                 const xPos = (slotIndex - 24.5) * CONFIG.SLOT_SPACING;
 
                 const avatar = new Avatar(userId, nickname, gender, isCurrentUser);
-                avatar.setPosition(xPos); // Теперь работает!
+                avatar.setPosition(xPos);
                 avatar.slotIndex = slotIndex; // Сохраняем индекс
 
                 this.avatars.set(userId, avatar);
@@ -505,7 +505,10 @@
                     setTimeout(() => window.__updateClickableObjects(), 500);
                 }
 
-                console.log(`✅ Avatar added at slot ${slotIndex}, position ${xPos}`);
+                if (cameraController) {
+                    cameraController.updateBounds();
+                }
+
                 return true;
             }
 
@@ -526,6 +529,18 @@
 
                 if (window.__updateClickableObjects) {
                     setTimeout(() => window.__updateClickableObjects(), 100);
+                }
+
+                if (cameraController) {
+                    cameraController.updateBounds();
+
+                    // Если остался 1 аватар - центрируем на нем
+                    if (this.getAvatarCount() === 1) {
+                        const remainingAvatar = this.getAvatars()[0];
+                        if (remainingAvatar) {
+                            cameraController.targetX = remainingAvatar.xPosition;
+                        }
+                    }
                 }
 
                 return true;
@@ -570,8 +585,51 @@
                 this.scrollVelocity = 0;
                 this.lastDragTime = 0;
 
+                // Границы скролла
+                this.minX = -CONFIG.SLOT_SPACING * 2; // По умолчанию
+                this.maxX = CONFIG.SLOT_SPACING * 2;
+
                 this.setupCamera();
                 this.setupEventListeners();
+            }
+
+            updateBounds() {
+                if (!avatarManager) return;
+
+                const avatarCount = avatarManager.getAvatarCount();
+
+                if (avatarCount <= 1) {
+                    // Если 1 аватар - центр на нем, скролл запрещен
+                    const avatar = avatarManager.getAvatars()[0];
+                    if (avatar) {
+                        this.minX = avatar.xPosition;
+                        this.maxX = avatar.xPosition;
+                        this.targetX = avatar.xPosition;
+                    }
+                } else {
+                    // Находим крайние позиции аватаров
+                    let minAvatarX = Infinity;
+                    let maxAvatarX = -Infinity;
+
+                    for (const avatar of avatarManager.getAvatars()) {
+                        if (avatar.xPosition < minAvatarX) minAvatarX = avatar.xPosition;
+                        if (avatar.xPosition > maxAvatarX) maxAvatarX = avatar.xPosition;
+                    }
+
+                    // Добавляем небольшие отступы по краям (половина видимой области)
+                    const visibleWidth = (this.camera.right - this.camera.left) / 2;
+                    this.minX = minAvatarX - visibleWidth / 2;
+                    this.maxX = maxAvatarX + visibleWidth / 2;
+
+                    // Если аватары помещаются в экран - центрируем всё
+                    if (this.maxX - this.minX < visibleWidth) {
+                        const center = (minAvatarX + maxAvatarX) / 2;
+                        this.minX = center - visibleWidth / 2;
+                        this.maxX = center + visibleWidth / 2;
+                    }
+                }
+
+                console.log(`Bounds updated: ${this.minX.toFixed(2)} to ${this.maxX.toFixed(2)}, count: ${avatarCount}`);
             }
 
             setupCamera() {
@@ -623,13 +681,13 @@
                     this.scrollVelocity = (deltaX / dt) * 0.5;
                 }
 
-                this.targetX = this.currentX - deltaX * CONFIG.SCROLL_SENSITIVITY;
+                // Вычисляем новую позицию
+                let newTargetX = this.currentX - deltaX * CONFIG.SCROLL_SENSITIVITY;
 
-                // Ограничиваем диапазон
-                const maxX = 24.5 * CONFIG.SLOT_SPACING;
-                const minX = -24.5 * CONFIG.SLOT_SPACING;
-                this.targetX = Math.max(minX, Math.min(maxX, this.targetX));
+                // Ограничиваем границами
+                newTargetX = Math.max(this.minX, Math.min(this.maxX, newTargetX));
 
+                this.targetX = newTargetX;
                 this.updateCameraPosition();
                 this.lastDragTime = now;
             }
@@ -638,8 +696,9 @@
                 if (!this.isDragging) return;
                 this.isDragging = false;
 
-                if (Math.abs(this.scrollVelocity) > 0.1) {
-                    this.startInertia();
+                // Проверяем, нужно ли центрироваться на ближайшем аватаре
+                if (avatarManager && avatarManager.getAvatarCount() > 0) {
+                    this.snapToNearestAvatar();
                 } else {
                     this.snapToNearestSlot();
                 }
@@ -652,15 +711,14 @@
                     this.scrollVelocity *= 0.95;
 
                     if (Math.abs(this.scrollVelocity) < 0.01) {
-                        this.snapToNearestSlot();
+                        this.snapToNearestAvatar();
                         return;
                     }
 
                     this.targetX += this.scrollVelocity * 0.5;
 
-                    const maxX = 24.5 * CONFIG.SLOT_SPACING;
-                    const minX = -24.5 * CONFIG.SLOT_SPACING;
-                    this.targetX = Math.max(minX, Math.min(maxX, this.targetX));
+                    // Ограничиваем границами
+                    this.targetX = Math.max(this.minX, Math.min(this.maxX, this.targetX));
 
                     this.updateCameraPosition();
                     requestAnimationFrame(inertia);
@@ -692,12 +750,10 @@
                     this.scrollVelocity = (deltaX / dt) * 0.5;
                 }
 
-                this.targetX = this.currentX - deltaX * CONFIG.SCROLL_SENSITIVITY;
+                let newTargetX = this.currentX - deltaX * CONFIG.SCROLL_SENSITIVITY;
+                newTargetX = Math.max(this.minX, Math.min(this.maxX, newTargetX));
 
-                const maxX = 24.5 * CONFIG.SLOT_SPACING;
-                const minX = -24.5 * CONFIG.SLOT_SPACING;
-                this.targetX = Math.max(minX, Math.min(maxX, this.targetX));
-
+                this.targetX = newTargetX;
                 this.updateCameraPosition();
                 this.lastDragTime = now;
             }
@@ -708,7 +764,7 @@
                 if (Math.abs(this.scrollVelocity) > 0.1) {
                     this.startInertia();
                 } else {
-                    this.snapToNearestSlot();
+                    this.snapToNearestAvatar();
                 }
             }
 
@@ -732,14 +788,38 @@
                 this.targetX = clampedSlot * CONFIG.SLOT_SPACING;
             }
 
+            snapToNearestAvatar() {
+                if (!avatarManager) return;
+
+                const currentX = this.camera.position.x;
+                let nearestAvatar = null;
+                let minDistance = Infinity;
+
+                // Ищем ближайший аватар
+                for (const avatar of avatarManager.getAvatars()) {
+                    const distance = Math.abs(avatar.xPosition - currentX);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestAvatar = avatar;
+                    }
+                }
+
+                if (nearestAvatar) {
+                    // Центрируем на ближайшем аватаре
+                    this.targetX = nearestAvatar.xPosition;
+                }
+            }
+
             update() {
                 if (!this.isDragging) {
                     this.updateCameraPosition();
                 }
 
+                // При первом входе или при изменении количества аватаров
                 if (!this.initialized && window.currentUserId) {
                     const myAvatar = avatarManager?.getAvatar(window.currentUserId);
                     if (myAvatar?.xPosition !== undefined) {
+                        this.updateBounds(); // Обновляем границы
                         this.targetX = myAvatar.xPosition;
                         this.initialized = true;
                         console.log('Camera centered on current user');
