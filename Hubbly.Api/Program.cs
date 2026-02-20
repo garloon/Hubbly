@@ -1,9 +1,10 @@
-﻿using Hubbly.Api.Controllers;
+﻿using FluentValidation;
+using FluentValidation.AspNetCore;
+using Hubbly.Api.Controllers;
 using Hubbly.Api.Hubs;
 using Hubbly.Api.Middleware;
 using Hubbly.Api.Validators;
 using Hubbly.Application.Services;
-using FluentValidation;
 using Hubbly.Domain.Events;
 using Hubbly.Domain.Common;
 using Hubbly.Domain.Services;
@@ -80,6 +81,9 @@ public class Program
         services.AddHttpContextAccessor();
         services.AddControllers();
 
+        // FluentValidation - automatic validation
+        services.AddFluentValidationAutoValidation();
+        
         // FluentValidation - manual registration
         services.AddSingleton<IValidator<GuestAuthRequest>, GuestAuthRequestValidator>();
         services.AddSingleton<IValidator<RefreshTokenRequest>, RefreshTokenRequestValidator>();
