@@ -19,7 +19,7 @@ public class ChatHub : Hub
     private readonly IMemoryCache _nonceCache;
 
     private static readonly ConcurrentDictionary<string, ConnectedUser> _connectedUsers = new();
-    private static readonly TimeSpan NonceLifetime = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan NonceLifetime = TimeSpan.FromMinutes(2);
 
     public ChatHub(
         IChatService chatService,
@@ -37,7 +37,7 @@ public class ChatHub : Hub
         _nonceCache = nonceCache ?? throw new ArgumentNullException(nameof(nonceCache));
     }
 
-    #region Подключение/Отключение
+    #region Connection/Disconnection
 
     public override async Task OnConnectedAsync()
     {
@@ -55,10 +55,10 @@ public class ChatHub : Hub
 
             try
             {
-                // Очищаем старое соединение если есть
+                // Clean up old connection if exists
                 await CleanupExistingConnectionAsync(userId);
 
-                // Получаем пользователя
+                // Get user
                 var user = await _userRepository.GetByIdAsync(userId);
                 if (user == null)
                 {
@@ -67,11 +67,11 @@ public class ChatHub : Hub
                     return;
                 }
 
-                // Получаем или создаем комнату
+                // Get or create room
                 var room = await _roomService.GetOrCreateRoomForGuestAsync();
                 await _roomService.AssignGuestToRoomAsync(userId, room.Id);
 
-                // Сохраняем информацию о подключенном пользователе
+                // Save connected user information
                 var connectedUser = new ConnectedUser
                 {
                     UserId = userId,
@@ -86,13 +86,13 @@ public class ChatHub : Hub
                 _connectedUsers[userId.ToString()] = connectedUser;
                 await Groups.AddToGroupAsync(connectionId, room.Id.ToString());
 
-                // Отправляем информацию о комнате
+                // Send room information
                 await SendRoomAssignmentAsync(room);
 
-                // Отправляем список существующих пользователей
+                // Send list of existing users
                 await SendExistingUsersAsync(room.Id, userId);
 
-                // Уведомляем других о новом пользователе
+                // Notify others about new user
                 await NotifyUserJoinedAsync(userId, user.Nickname, user.AvatarConfigJson, room.Id);
 
                 _logger.LogInformation("User {Nickname} (ID: {UserId}) connected to room {RoomName} ({Users}/{Max})",
@@ -129,9 +129,9 @@ public class ChatHub : Hub
 
     #endregion
 
-    #region Обработчики сообщений
+    #region Message handlers
 
-    public async Task SendMessage(string content, string? actionType = null, long? timestamp = null, string? nonce = null)
+    public async Task SendMessage(string? content, string? actionType = null, long? timestamp = null, string? nonce = null)
     {
         var userId = Guid.Parse(Context.User!.FindFirst("userId")!.Value);
 
@@ -143,7 +143,7 @@ public class ChatHub : Hub
         {
             _logger.LogDebug("SendMessage called");
 
-            // Валидация
+            // Validation
             if (!timestamp.HasValue)
             {
                 _logger.LogWarning("Missing timestamp");
@@ -158,7 +158,14 @@ public class ChatHub : Hub
                 return;
             }
 
-            if (content?.Length > 500)
+            if (string.IsNullOrEmpty(content))
+            {
+                _logger.LogWarning("Empty message content");
+                await Clients.Caller.SendAsync("ReceiveError", "Message cannot be empty");
+                return;
+            }
+
+            if (content.Length > 500)
             {
                 _logger.LogWarning("Message too long: {Length}", content.Length);
                 await Clients.Caller.SendAsync("ReceiveError", "Message too long");
@@ -264,15 +271,15 @@ public class ChatHub : Hub
 
     #endregion
 
-    #region Валидация
+    #region Validation
 
-    private async Task<bool> ValidateConnectionAsync()
+    private Task<bool> ValidateConnectionAsync()
     {
         if (Context.User?.Identity?.IsAuthenticated != true)
         {
             _logger.LogWarning("User not authenticated on connect");
             Context.Abort();
-            return false;
+            return Task.FromResult(false);
         }
 
         var userIdClaim = Context.User.FindFirst("userId");
@@ -280,22 +287,22 @@ public class ChatHub : Hub
         {
             _logger.LogWarning("userId claim not found on connect");
             Context.Abort();
-            return false;
+            return Task.FromResult(false);
         }
 
         if (!Guid.TryParse(userIdClaim.Value, out _))
         {
             _logger.LogWarning("Invalid userId format: {UserId}", userIdClaim.Value);
             Context.Abort();
-            return false;
+            return Task.FromResult(false);
         }
 
-        return true;
+        return Task.FromResult(true);
     }
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private async Task CleanupExistingConnectionAsync(Guid userId)
     {

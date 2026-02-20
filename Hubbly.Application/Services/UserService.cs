@@ -18,7 +18,7 @@ public class UserService : IUserService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public async Task<UserProfileDto> GetUserProfileAsync(Guid userId)
     {
@@ -134,7 +134,7 @@ public class UserService : IUserService
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private async Task<User> GetUserAsync(Guid userId)
     {
@@ -188,7 +188,7 @@ public class UserService : IUserService
             Id = user.Id,
             Nickname = user.Nickname,
             AvatarConfigJson = user.AvatarConfigJson,
-            IsGuest = true // По умолчанию все гости, потом будет меняться
+            IsGuest = true // By default all are guests, will be changed later
         };
     }
 

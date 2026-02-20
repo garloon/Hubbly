@@ -28,7 +28,7 @@ public class RoomCleanupService : BackgroundService
                 using var scope = _serviceProvider.CreateScope();
                 var roomService = scope.ServiceProvider.GetRequiredService<IRoomService>();
 
-                // Очищаем раз в час, но удаляем через 1 день (было 10 дней)
+                // Clean up every hour, but delete after 1 day (was 10 days)
                 await roomService.CleanupEmptyRoomsAsync(TimeSpan.FromDays(1));
 
                 await Task.Delay(TimeSpan.FromHours(1), stoppingToken);

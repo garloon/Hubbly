@@ -27,15 +27,15 @@ public class AvatarValidator : IAvatarValidator
                 return false;
             }
 
-            // Базовая валидация
+            // Basic validation
             if (!config.IsValid())
             {
                 _logger.LogWarning("Avatar config validation failed");
                 return false;
             }
 
-            // TODO: Когда появится система ассетов - добавить проверку ownedAssetIds
-            // Сейчас просто пропускаем
+            // TODO: When asset system is implemented - add validation for ownedAssetIds
+            // For now just skip
 
             return true;
         }

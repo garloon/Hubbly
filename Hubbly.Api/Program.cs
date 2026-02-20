@@ -27,14 +27,14 @@ public class Program
         var configuration = builder.Configuration;
         var environment = builder.Environment;
 
-        // Настройка сервисов
+        // Configure services
         ConfigureServices(builder.Services, configuration, environment);
 
         var app = builder.Build();
 
         await ApplyMigrations(app);
 
-        // Настройка middleware
+        // Configure middleware
         ConfigureMiddleware(app, environment);
 
         await app.RunAsync();
@@ -62,7 +62,7 @@ public class Program
             
             if (app.Environment.IsProduction())
             {
-                throw; // Приложение не запустится
+                throw; // Application will not start
             }
         }
     }
@@ -72,22 +72,30 @@ public class Program
         services.AddHttpContextAccessor();
         services.AddControllers();
 
-        // Настройка Health Checks
+        // Configure health checks
         ConfigureHealthChecks(services, configuration);
 
         // Swagger
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
 
-        // Database
+        // Database with Polly retry policy
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                npgsqlOptions =>
+                {
+                    npgsqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(10),
+                        errorCodesToAdd: null);
+                }));
 
         // JWT
         ConfigureJwt(services, configuration);
 
         // CORS
-        ConfigureCors(services);
+        ConfigureCors(services, configuration);
 
         // SignalR
         ConfigureSignalR(services);
@@ -95,8 +103,12 @@ public class Program
         // Rate Limiting
         ConfigureRateLimiting(services);
 
-        // Cache
-        services.AddMemoryCache();
+        // Cache with size limit to prevent memory leaks
+        services.AddMemoryCache(options =>
+        {
+            options.SizeLimit = 1024 * 1024; // 1MB limit
+            options.ExpirationScanFrequency = TimeSpan.FromMinutes(1);
+        });
 
         // Options
         services.Configure<RoomServiceOptions>(configuration.GetSection("Rooms"));
@@ -106,7 +118,7 @@ public class Program
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
         // Services
-        services.AddSingleton<JwtTokenService>();
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IChatService, ChatService>();
@@ -177,23 +189,34 @@ public class Program
         });
     }
 
-    private static void ConfigureCors(IServiceCollection services)
+    private static void ConfigureCors(IServiceCollection services, IConfiguration configuration)
     {
+        var corsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        
         services.AddCors(options =>
         {
             options.AddPolicy("AllowMobileApp", policy =>
             {
-                policy.WithOrigins(
-                        "http://localhost:5000",
-                        "http://127.0.0.1:5000",
-                        "http://10.0.2.2:5000",
-                        "http://192.168.0.103:5000",
-                        "http://127.0.0.1:5500"
-                    )
-                    .AllowAnyMethod()
-                    .AllowAnyHeader()
-                    .AllowCredentials()
-                    .SetIsOriginAllowedToAllowWildcardSubdomains();
+                if (corsOrigins != null && corsOrigins.Length > 0)
+                {
+                    policy.WithOrigins(corsOrigins)
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials()
+                        .SetIsOriginAllowedToAllowWildcardSubdomains();
+                }
+                else
+                {
+                    // Fallback if configuration is missing
+                    policy.WithOrigins(
+                            "http://localhost:5000",
+                            "http://127.0.0.1:5000"
+                        )
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials()
+                        .SetIsOriginAllowedToAllowWildcardSubdomains();
+                }
             });
         });
     }
@@ -262,6 +285,36 @@ public class Program
         app.UseCors("AllowMobileApp");
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // Global exception handler
+        app.UseExceptionHandler(errorApp =>
+        {
+            errorApp.Run(async context =>
+            {
+                var exceptionHandlerPathFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+                var exception = exceptionHandlerPathFeature?.Error;
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+                if (exception != null)
+                {
+                    logger.LogError(exception, "Unhandled exception occurred on path: {Path}", context.Request.Path);
+                }
+
+                context.Response.StatusCode = 500;
+                context.Response.ContentType = "application/json";
+
+                var response = new
+                {
+                    error = "An internal server error occurred. Please try again later.",
+                    // Only show details in development
+                    details = context.RequestServices.GetService<IHostEnvironment>()?.IsDevelopment() == true && exception != null
+                        ? exception.Message
+                        : null
+                };
+
+                await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response));
+            });
+        });
 
         // Request logging middleware
         app.UseMiddleware<RequestLoggingMiddleware>();
@@ -344,8 +397,8 @@ public class SignalRHealthCheck : IHealthCheck
     {
         try
         {
-            // Здесь можно добавить реальную проверку SignalR хаба
-            // Например, проверить, что хаб зарегистрирован в маршрутах
+            // You can add real SignalR hub check here
+            // For example, check that the hub is registered in routes
             return Task.FromResult(HealthCheckResult.Healthy("SignalR Hub is configured"));
         }
         catch (Exception ex)

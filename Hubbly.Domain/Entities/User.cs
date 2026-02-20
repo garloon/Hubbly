@@ -12,10 +12,10 @@ public class User
     public string AvatarConfigJson { get; private set; } = "{}";
     public List<string> OwnedAssetIds { get; private set; } = new();
 
-    // Навигационные свойства
+    // Navigation properties
     public ICollection<RefreshToken> RefreshTokens { get; private set; } = new List<RefreshToken>();
 
-    private User() { } // Для EF Core
+    private User() { } // For EF Core
 
     public User(string deviceId, string nickname, string? avatarConfigJson = null)
     {
@@ -24,11 +24,11 @@ public class User
         Nickname = nickname;
         CreatedAt = DateTimeOffset.UtcNow;
 
-        // Инициализируем аватар
+        // Initialize avatar
         AvatarConfigJson = InitializeAvatarConfig(avatarConfigJson);
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public void UpdateNickname(string newNickname)
     {
@@ -72,7 +72,7 @@ public class User
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private string InitializeAvatarConfig(string? avatarConfigJson)
     {

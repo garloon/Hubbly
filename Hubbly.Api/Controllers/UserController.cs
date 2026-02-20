@@ -21,7 +21,7 @@ public class UserController : ControllerBase
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     [HttpGet("me")]
     [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
@@ -60,42 +60,47 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateNickname([FromBody] UpdateNicknameRequest request)
     {
-        var userId = GetCurrentUserId();
+       if (request == null)
+       {
+           return BadRequest(new { error = "Request cannot be null" });
+       }
 
-        using (_logger.BeginScope(new Dictionary<string, object>
-        {
-            ["UserId"] = userId,
-            ["NewNickname"] = request?.NewNickname
-        }))
-        {
-            _logger.LogInformation("UpdateNickname requested");
+       var userId = GetCurrentUserId();
 
-            try
-            {
-                ValidateUpdateNicknameRequest(request);
+       using (_logger.BeginScope(new Dictionary<string, object>
+       {
+           ["UserId"] = userId,
+           ["NewNickname"] = request.NewNickname
+       }))
+       {
+           _logger.LogInformation("UpdateNickname requested");
 
-                await _userService.UpdateUserNicknameAsync(userId, request!.NewNickname);
+           try
+           {
+               ValidateUpdateNicknameRequest(request);
 
-                _logger.LogInformation("Nickname updated successfully");
-                return NoContent();
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Invalid nickname");
-                return BadRequest(new { error = ex.Message });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                _logger.LogWarning(ex, "User not found");
-                return NotFound(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating nickname");
-                return StatusCode(500, new { error = "Internal server error" });
-            }
-        }
-    }
+               await _userService.UpdateUserNicknameAsync(userId, request.NewNickname);
+
+               _logger.LogInformation("Nickname updated successfully");
+               return NoContent();
+           }
+           catch (ArgumentException ex)
+           {
+               _logger.LogWarning(ex, "Invalid nickname");
+               return BadRequest(new { error = ex.Message });
+           }
+           catch (KeyNotFoundException ex)
+           {
+               _logger.LogWarning(ex, "User not found");
+               return NotFound(new { error = ex.Message });
+           }
+           catch (Exception ex)
+           {
+               _logger.LogError(ex, "Error updating nickname");
+               return StatusCode(500, new { error = "Internal server error" });
+           }
+       }
+   }
 
     [HttpPut("avatar")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -148,7 +153,7 @@ public class UserController : ControllerBase
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private Guid GetCurrentUserId()
     {

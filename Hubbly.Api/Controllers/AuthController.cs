@@ -19,7 +19,7 @@ public class AuthController : ControllerBase
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     [HttpPost("guest")]
     [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
@@ -27,38 +27,43 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> AuthenticateGuest([FromBody] GuestAuthRequest request)
     {
-        using (_logger.BeginScope(new Dictionary<string, object>
-        {
-            ["DeviceId"] = request?.DeviceId,
-            ["HasAvatar"] = !string.IsNullOrEmpty(request?.AvatarConfigJson)
-        }))
-        {
-            _logger.LogInformation("Guest authentication requested");
+       if (request == null)
+       {
+           return BadRequest(new { error = "Request cannot be null" });
+       }
 
-            try
-            {
-                ValidateGuestRequest(request);
+       using (_logger.BeginScope(new Dictionary<string, object>
+       {
+           ["DeviceId"] = request.DeviceId,
+           ["HasAvatar"] = !string.IsNullOrEmpty(request.AvatarConfigJson)
+       }))
+       {
+           _logger.LogInformation("Guest authentication requested");
 
-                var response = await _authService.AuthenticateGuestAsync(
-                    request!.DeviceId,
-                    request.AvatarConfigJson);
+           try
+           {
+               ValidateGuestRequest(request);
 
-                _logger.LogInformation("Guest authenticated successfully: UserId {UserId}", response.User.Id);
+               var response = await _authService.AuthenticateGuestAsync(
+                   request.DeviceId,
+                   request.AvatarConfigJson);
 
-                return Ok(response);
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Invalid guest request");
-                return BadRequest(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Guest authentication failed");
-                return StatusCode(500, new { error = "Authentication failed" });
-            }
-        }
-    }
+               _logger.LogInformation("Guest authenticated successfully: UserId {UserId}", response.User.Id);
+
+               return Ok(response);
+           }
+           catch (ArgumentException ex)
+           {
+               _logger.LogWarning(ex, "Invalid guest request");
+               return BadRequest(new { error = ex.Message });
+           }
+           catch (Exception ex)
+           {
+               _logger.LogError(ex, "Guest authentication failed");
+               return StatusCode(500, new { error = "Authentication failed" });
+           }
+       }
+   }
 
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
@@ -67,47 +72,52 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        using (_logger.BeginScope(new Dictionary<string, object>
-        {
-            ["DeviceId"] = request?.DeviceId,
-            ["HasRefreshToken"] = !string.IsNullOrEmpty(request?.RefreshToken)
-        }))
-        {
-            _logger.LogInformation("Token refresh requested");
+       if (request == null)
+       {
+           return BadRequest(new { error = "Request cannot be null" });
+       }
 
-            try
-            {
-                ValidateRefreshRequest(request);
+       using (_logger.BeginScope(new Dictionary<string, object>
+       {
+           ["DeviceId"] = request.DeviceId,
+           ["HasRefreshToken"] = !string.IsNullOrEmpty(request.RefreshToken)
+       }))
+       {
+           _logger.LogInformation("Token refresh requested");
 
-                var response = await _authService.RefreshTokenAsync(
-                    request!.RefreshToken,
-                    request.DeviceId);
+           try
+           {
+               ValidateRefreshRequest(request);
 
-                _logger.LogInformation("Token refreshed successfully for user {UserId}", response.User.Id);
+               var response = await _authService.RefreshTokenAsync(
+                   request.RefreshToken,
+                   request.DeviceId);
 
-                return Ok(response);
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogWarning(ex, "Invalid refresh request");
-                return BadRequest(new { error = ex.Message });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Unauthorized refresh attempt");
-                return Unauthorized(new { error = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Token refresh failed");
-                return StatusCode(500, new { error = "Token refresh failed" });
-            }
-        }
-    }
+               _logger.LogInformation("Token refreshed successfully for user {UserId}", response.User.Id);
+
+               return Ok(response);
+           }
+           catch (ArgumentException ex)
+           {
+               _logger.LogWarning(ex, "Invalid refresh request");
+               return BadRequest(new { error = ex.Message });
+           }
+           catch (UnauthorizedAccessException ex)
+           {
+               _logger.LogWarning(ex, "Unauthorized refresh attempt");
+               return Unauthorized(new { error = ex.Message });
+           }
+           catch (Exception ex)
+           {
+               _logger.LogError(ex, "Token refresh failed");
+               return StatusCode(500, new { error = "Token refresh failed" });
+           }
+       }
+   }
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private void ValidateGuestRequest(GuestAuthRequest? request)
     {

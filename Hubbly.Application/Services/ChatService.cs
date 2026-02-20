@@ -23,7 +23,7 @@ public class ChatService : IChatService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public async Task<ChatMessageDto> SendMessageAsync(Guid senderId, string content, string? actionType = null)
     {
@@ -38,16 +38,16 @@ public class ChatService : IChatService
 
             try
             {
-                // 1. Проверяем пользователя
+                // 1. Check user
                 var sender = await GetSenderAsync(senderId);
 
                 if (string.IsNullOrWhiteSpace(content))
                     throw new ArgumentException("Message content cannot be empty");
 
-                // 2. Валидируем сообщение
+                // 2. Validate message
                 await ValidateMessageAsync(content, actionType);
 
-                // 3. Создаем DTO
+                // 3. Create DTO
                 var messageDto = CreateMessageDto(senderId, sender.Nickname, content, actionType);
 
                 _logger.LogInformation("Message sent by {SenderNickname}", sender.Nickname);
@@ -77,7 +77,7 @@ public class ChatService : IChatService
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private async Task<User> GetSenderAsync(Guid senderId)
     {
@@ -92,14 +92,14 @@ public class ChatService : IChatService
 
     private async Task ValidateMessageAsync(string content, string? actionType)
     {
-        // Валидация контента
+        // Content validation
         if (!await ValidateMessageContentAsync(content))
         {
             _logger.LogWarning("Message contains invalid content");
             throw new InvalidOperationException("Message contains invalid content.");
         }
 
-        // Валидация action type
+        // Action type validation
         if (!string.IsNullOrEmpty(actionType) && !IsValidActionType(actionType))
         {
             _logger.LogWarning("Invalid action type: {ActionType}", actionType);
@@ -109,14 +109,14 @@ public class ChatService : IChatService
 
     private async Task<bool> ValidateMessageContentAsync(string content)
     {
-        // Проверка длины
+        // Length check
         if (string.IsNullOrWhiteSpace(content) || content.Length > 500)
         {
             _logger.LogDebug("Message validation failed: length {Length}", content?.Length ?? 0);
             return false;
         }
         
-        // Проверка на спам
+        // Spam check
         if (IsSpam(content))
         {
             _logger.LogDebug("Message validation failed: spam detected");
@@ -128,7 +128,7 @@ public class ChatService : IChatService
 
     private bool IsSpam(string content)
     {
-        // Блокируем сообщения с более чем 5 повторяющимися символами подряд
+        // Block messages with more than 5 consecutive repeating characters
         return System.Text.RegularExpressions.Regex.IsMatch(content, @"(.)\1{5,}");
     }
 

@@ -52,7 +52,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
                 c => c.ToList()
             ));
 
-        // Индексы
+        // Indexes
         builder.HasIndex(u => u.DeviceId)
             .HasDatabaseName("IX_Users_DeviceId");
 
@@ -63,7 +63,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(u => u.CreatedAt)
             .HasDatabaseName("IX_Users_CreatedAt");
 
-        // Связи
+        // Relationships
         builder.HasMany(u => u.RefreshTokens)
             .WithOne()
             .HasForeignKey(rt => rt.UserId)
@@ -93,7 +93,7 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.Property(rt => rt.LastUsedAt);
 
-        // Индексы
+        // Indexes
         builder.HasIndex(rt => rt.Token)
             .IsUnique()
             .HasDatabaseName("IX_RefreshTokens_Token");

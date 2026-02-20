@@ -1,7 +1,7 @@
 ﻿namespace Hubbly.Api.Hubs;
 
 /// <summary>
-/// Модель подключенного пользователя для внутреннего использования
+/// Model of connected user for internal use
 /// </summary>
 public class ConnectedUser
 {

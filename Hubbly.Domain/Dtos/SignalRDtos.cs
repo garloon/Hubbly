@@ -1,7 +1,7 @@
 ﻿namespace Hubbly.Domain.Dtos;
 
 /// <summary>
-/// Данные о назначении пользователя в комнату
+/// Data about user assignment to a room
 /// </summary>
 public class RoomAssignmentData
 {
@@ -12,7 +12,7 @@ public class RoomAssignmentData
 }
 
 /// <summary>
-/// Данные о подключившемся пользователе
+/// Data about the connected user
 /// </summary>
 public class UserJoinedData
 {
@@ -23,7 +23,7 @@ public class UserJoinedData
 }
 
 /// <summary>
-/// Данные о вышедшем пользователе
+/// Data about the user who left
 /// </summary>
 public class UserLeftData
 {
@@ -33,7 +33,7 @@ public class UserLeftData
 }
 
 /// <summary>
-/// Данные о печатающем пользователе
+/// Data about the typing user
 /// </summary>
 public class UserTypingData
 {

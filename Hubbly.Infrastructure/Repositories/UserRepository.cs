@@ -19,135 +19,82 @@ public class UserRepository : IUserRepository
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public async Task<User?> GetByDeviceIdAsync(string deviceId)
     {
-        try
-        {
-            _logger.LogDebug("Getting user by DeviceId: {DeviceId}", deviceId);
+        _logger.LogDebug("Getting user by DeviceId: {DeviceId}", deviceId);
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.DeviceId == deviceId);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.DeviceId == deviceId);
 
-            _logger.LogDebug(user != null
-                ? "User found: {UserId}"
-                : "User not found for DeviceId: {DeviceId}",
-                user?.Id, deviceId);
+        _logger.LogDebug(user != null
+            ? "User found: {UserId}"
+            : "User not found for DeviceId: {DeviceId}",
+            user?.Id, deviceId);
 
-            return user;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting user by DeviceId: {DeviceId}", deviceId);
-            throw;
-        }
+        return user;
     }
 
     public async Task<User?> GetByIdAsync(Guid userId)
     {
-        try
-        {
-            _logger.LogDebug("Getting user by Id: {UserId}", userId);
+        _logger.LogDebug("Getting user by Id: {UserId}", userId);
 
-            var user = await _context.Users.FindAsync(userId);
+        var user = await _context.Users.FindAsync(userId);
 
-            _logger.LogDebug(user != null
-                ? "User found"
-                : "User not found: {UserId}", userId);
+        _logger.LogDebug(user != null
+            ? "User found"
+            : "User not found: {UserId}", userId);
 
-            return user;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting user by Id: {UserId}", userId);
-            throw;
-        }
+        return user;
     }
 
     public async Task<User?> GetByNicknameAsync(string nickname)
     {
-        try
-        {
-            _logger.LogDebug("Getting user by nickname: {Nickname}", nickname);
+        _logger.LogDebug("Getting user by nickname: {Nickname}", nickname);
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Nickname == nickname);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Nickname == nickname);
 
-            _logger.LogDebug(user != null
-                ? "User found: {UserId}"
-                : "User not found for nickname: {Nickname}",
-                user?.Id, nickname);
+        _logger.LogDebug(user != null
+            ? "User found: {UserId}"
+            : "User not found for nickname: {Nickname}",
+            user?.Id, nickname);
 
-            return user;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting user by nickname: {Nickname}", nickname);
-            throw;
-        }
+        return user;
     }
 
     public async Task<IEnumerable<User>> GetByIdsAsync(IEnumerable<Guid> userIds)
     {
-        try
-        {
-            var userIdList = userIds.ToList();
-            _logger.LogDebug("Getting {Count} users by Ids", userIdList.Count);
+        var userIdList = userIds.ToList();
+        _logger.LogDebug("Getting {Count} users by Ids", userIdList.Count);
 
-            var users = await _context.Users
-                .Where(u => userIdList.Contains(u.Id))
-                .ToListAsync();
+        var users = await _context.Users
+            .Where(u => userIdList.Contains(u.Id))
+            .ToListAsync();
 
-            _logger.LogDebug("Found {Count} users", users.Count);
+        _logger.LogDebug("Found {Count} users", users.Count);
 
-            return users;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting users by Ids");
-            throw;
-        }
+        return users;
     }
 
     public async Task AddAsync(User user)
     {
-        try
-        {
-            _logger.LogInformation("Adding new user: {UserId}, DeviceId: {DeviceId}",
-                user.Id, user.DeviceId);
+        _logger.LogInformation("Adding new user: {UserId}, DeviceId: {DeviceId}",
+            user.Id, user.DeviceId);
 
-            await _context.Users.AddAsync(user);
-            await _context.SaveChangesAsync();
+        await _context.Users.AddAsync(user);
+        await _context.SaveChangesAsync();
 
-            _logger.LogDebug("User added successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error adding user: {UserId}", user.Id);
-            throw;
-        }
+        _logger.LogDebug("User added successfully");
     }
 
     public async Task UpdateAsync(User user)
     {
-        try
-        {
-            _logger.LogDebug("Updating user: {UserId}", user.Id);
+        _logger.LogDebug("Updating user: {UserId}", user.Id);
 
-            _context.Users.Update(user);
-            await _context.SaveChangesAsync();
+        _context.Users.Update(user);
+        await _context.SaveChangesAsync();
 
-            _logger.LogTrace("User updated successfully");
-        }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            _logger.LogError(ex, "Concurrency error updating user: {UserId}", user.Id);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating user: {UserId}", user.Id);
-            throw;
-        }
+        _logger.LogTrace("User updated successfully");
     }
 
     #endregion

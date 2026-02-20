@@ -1,4 +1,5 @@
 ﻿using Hubbly.Domain.Common;
+using Hubbly.Domain.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -8,7 +9,7 @@ using System.Text;
 
 namespace Hubbly.Application.Services;
 
-public class JwtTokenService
+public class JwtTokenService : IJwtTokenService
 {
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<JwtTokenService> _logger;
@@ -21,7 +22,7 @@ public class JwtTokenService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public string GenerateAccessToken(Guid userId, string nickname)
     {
@@ -139,7 +140,7 @@ public class JwtTokenService
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private Claim[] CreateClaims(Guid userId, string nickname)
     {

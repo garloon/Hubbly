@@ -71,7 +71,7 @@
         import * as TWEEN from 'https://cdn.skypack.dev/@tweenjs/tween.js@18.6.4';
 
         const CONFIG = {
-            SERVER_BASE_URL: "http://89.169.46.33:5000/",
+            SERVER_BASE_URL: getServerBaseUrl(),
             SLOT_SPACING: 2.0,
             CAMERA_DISTANCE: 2.5,
             SCROLL_SENSITIVITY: 0.005,
@@ -86,6 +86,25 @@
                 wave: 'waving.glb'
             }
         };
+
+        function getServerBaseUrl() {
+            // 1. Try URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const serverParam = urlParams.get('server');
+            if (serverParam) {
+                return serverParam.endsWith('/') ? serverParam : serverParam + '/';
+            }
+            
+            // 2. Try meta tag
+            const metaTag = document.querySelector('meta[name="server-url"]');
+            if (metaTag && metaTag.content) {
+                return metaTag.content.endsWith('/') ? metaTag.content : metaTag.content + '/';
+            }
+            
+            // 3. Use current origin (default)
+            const origin = window.location.origin;
+            return origin.endsWith('/') ? origin : origin + '/';
+        }
 
         let scene, camera, renderer;
         let avatarManager;
@@ -115,7 +134,7 @@
             createPlaceholder() {
                 this.group = new THREE.Group();
 
-                // Визуальная часть (прозрачный куб)
+                // Visual part (transparent cube)
                 const geometry = new THREE.BoxGeometry(0.8, 1.8, 0.4);
                 const color = this.isCurrentUser ? CONFIG.HIGHLIGHT_COLOR : CONFIG.DEFAULT_COLOR;
                 const material = new THREE.MeshPhongMaterial({
@@ -192,7 +211,7 @@
                 if (this.isLoaded) return;
 
                 const parent = this.group ? this.group.parent : null;
-                const currentX = this.xPosition; // Используем сохраненную позицию
+                const currentX = this.xPosition; // Use saved position
                 const oldCollider = this.collider;
 
                 try {
@@ -204,7 +223,7 @@
                         }
 
                         this.group = newModel;
-                        this.group.position.set(currentX, CONFIG.AVATAR_FOOT_Y, 0); // Используем currentX
+                        this.group.position.set(currentX, CONFIG.AVATAR_FOOT_Y, 0); // Use currentX
                         this.group.scale.set(CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE, CONFIG.MODEL_SCALE);
 
                         if (oldCollider) {
@@ -277,7 +296,7 @@
                     const idleAnimation = await this.loadAnimation('idle');
                     if (idleAnimation && this.mixer) {
                         const action = this.mixer.clipAction(idleAnimation);
-                        action.setLoop(THREE.LoopRepeat, Infinity); // idle должен зацикливаться
+                        action.setLoop(THREE.LoopRepeat, Infinity); // idle should loop
                         this.actions.set('idle', action);
                         action.play();
                         this.currentAction = action;
@@ -289,7 +308,7 @@
 
             async loadAnimation(animationName) {
                 return new Promise((resolve, reject) => {
-                    // Формируем правильное имя файла с учетом пола
+                    // Form correct filename based on gender
                     let animationFile;
 
                     if (animationName === 'idle') {
@@ -299,7 +318,7 @@
                     } else if (animationName === 'wave') {
                         animationFile = this.gender === 'male' ? 'male_waving.glb' : 'female_waving.glb';
                     } else {
-                        // Для других анимаций (если добавятся)
+                        // For other animations (if added)
                         animationFile = `${this.gender}_${animationName}.glb`;
                     }
 
@@ -324,7 +343,7 @@
             async playAnimation(animationName, loop = false, fadeDuration = 0.3) {
                 if (!this.mixer) return false;
 
-                // Загружаем анимацию если её нет
+                // Load animation if it doesn't exist
                 if (!this.actions.has(animationName)) {
                     try {
                         const clip = await this.loadAnimation(animationName);
@@ -341,40 +360,40 @@
                 const action = this.actions.get(animationName);
                 if (!action) return false;
 
-                // Останавливаем текущую анимацию
+                // Stop current animation
                 if (this.currentAction) {
                     this.currentAction.fadeOut(fadeDuration);
                 }
 
-                // Настраиваем новую анимацию
+                // Configure new animation
                 action.reset();
 
                 if (loop) {
-                    // Зацикленная анимация (idle)
+                    // Looping animation (idle)
                     action.setLoop(THREE.LoopRepeat, Infinity);
                     action.clampWhenFinished = false;
                 } else {
-                    // Одноразовая анимация (clap)
+                    // One-time animation (clap)
                     action.setLoop(THREE.LoopOnce, 1);
                     action.clampWhenFinished = false;
 
-                    // Получаем длительность анимации
+                    // Get animation duration
                     if (action.getClip()) {
-                        const duration = action.getClip().duration * 1000; // в миллисекундах
+                        const duration = action.getClip().duration * 1000; // in milliseconds
 
-                        // Убираем предыдущий таймер если был
+                        // Remove previous timer if exists
                         if (this._returnToIdleTimer) {
                             clearTimeout(this._returnToIdleTimer);
                         }
 
-                        // Ставим таймер на возврат в idle
+                        // Set timer to return to idle
                         this._returnToIdleTimer = setTimeout(() => {
                             if (this.mixer && this.currentAction === action) {
                                 console.log(`${this.nickname} finished ${animationName}, returning to idle`);
                                 this.playAnimation('idle', true, fadeDuration);
                             }
                             this._returnToIdleTimer = null;
-                        }, duration - 50); // Возвращаемся чуть раньше для плавности
+                        }, duration - 50); // Return slightly earlier for smoothness
                     }
                 }
 
@@ -441,7 +460,7 @@
                 this.currentAction = null;
 
                 if (this.group) {
-                    // Очищаем геометрию и материалы
+                    // Clear geometry and materials
                     this.group.traverse((obj) => {
                         if (obj.geometry) obj.geometry.dispose();
                         if (obj.material) {
@@ -469,7 +488,7 @@
                 this.positions = new Map(); // userId -> { slot, x }
                 this.availableSlots = [];
 
-                // Создаем слоты для 50 человек (от 0 до 49)
+                // Create slots for 50 people (from 0 to 49)
                 for (let i = 0; i < 50; i++) {
                     this.availableSlots.push(i);
                 }
@@ -488,20 +507,20 @@
 
                 const slotIndex = this.availableSlots.shift();
 
-                // Вычисляем позицию: от -49 до 0? Нет, лучше симметрично от -24.5 до 24.5
-                // Чтобы центр был между слотами 24 и 25
+                // Calculate position: from -49 to 0? No, better symmetrically from -24.5 to 24.5
+                // So center is between slots 24 and 25
                 const xPos = (slotIndex - 24.5) * CONFIG.SLOT_SPACING;
 
                 const avatar = new Avatar(userId, nickname, gender, isCurrentUser);
                 avatar.setPosition(xPos);
-                avatar.slotIndex = slotIndex; // Сохраняем индекс
+                avatar.slotIndex = slotIndex; // Save index
 
                 this.avatars.set(userId, avatar);
                 this.positions.set(userId, { slot: slotIndex, x: xPos });
 
                 scene.add(avatar.group);
 
-                // Загружаем модель с задержкой
+                // Load model with delay
                 setTimeout(() => avatar.loadModel(), 300 + (this.avatars.size * 100));
 
                 if (window.__updateClickableObjects) {
@@ -537,7 +556,7 @@
                 if (cameraController) {
                     cameraController.updateBounds();
 
-                    // Если остался 1 аватар - центрируем на нем
+                    // If 1 avatar remains - center on it
                     if (this.getAvatarCount() === 1) {
                         const remainingAvatar = this.getAvatars()[0];
                         if (remainingAvatar) {
@@ -588,8 +607,8 @@
                 this.scrollVelocity = 0;
                 this.lastDragTime = 0;
 
-                // Границы скролла
-                this.minX = -CONFIG.SLOT_SPACING * 2; // По умолчанию
+                // Scroll boundaries
+                this.minX = -CONFIG.SLOT_SPACING * 2; // By default
                 this.maxX = CONFIG.SLOT_SPACING * 2;
 
                 this.setupCamera();
@@ -602,7 +621,7 @@
                 const avatarCount = avatarManager.getAvatarCount();
 
                 if (avatarCount <= 1) {
-                    // Если 1 аватар - центр на нем, скролл запрещен
+                    // If 1 avatar - center on it, scrolling disabled
                     const avatar = avatarManager.getAvatars()[0];
                     if (avatar) {
                         this.minX = avatar.xPosition;
@@ -610,7 +629,7 @@
                         this.targetX = avatar.xPosition;
                     }
                 } else {
-                    // Находим крайние позиции аватаров
+                    // Find extreme avatar positions
                     let minAvatarX = Infinity;
                     let maxAvatarX = -Infinity;
 
@@ -619,12 +638,12 @@
                         if (avatar.xPosition > maxAvatarX) maxAvatarX = avatar.xPosition;
                     }
 
-                    // Добавляем небольшие отступы по краям (половина видимой области)
+                    // Add small margins at edges (half of visible area)
                     const visibleWidth = (this.camera.right - this.camera.left) / 2;
                     this.minX = minAvatarX - visibleWidth / 2;
                     this.maxX = maxAvatarX + visibleWidth / 2;
 
-                    // Если аватары помещаются в экран - центрируем всё
+                    // If avatars fit on screen - center everything
                     if (this.maxX - this.minX < visibleWidth) {
                         const center = (minAvatarX + maxAvatarX) / 2;
                         this.minX = center - visibleWidth / 2;
@@ -637,7 +656,7 @@
 
             setupCamera() {
                 const aspect = window.innerWidth / window.innerHeight;
-                const frustumSize = 4.0; // Немного увеличил, чтобы видеть больше
+                const frustumSize = 4.0; // Slightly increased to see more
 
                 this.camera.left = -frustumSize * aspect / 2;
                 this.camera.right = frustumSize * aspect / 2;
@@ -684,10 +703,10 @@
                     this.scrollVelocity = (deltaX / dt) * 0.5;
                 }
 
-                // Вычисляем новую позицию
+                // Calculate new position
                 let newTargetX = this.currentX - deltaX * CONFIG.SCROLL_SENSITIVITY;
 
-                // Ограничиваем границами
+                // Limit by boundaries
                 newTargetX = Math.max(this.minX, Math.min(this.maxX, newTargetX));
 
                 this.targetX = newTargetX;
@@ -699,7 +718,7 @@
                 if (!this.isDragging) return;
                 this.isDragging = false;
 
-                // Проверяем, нужно ли центрироваться на ближайшем аватаре
+                // Check if need to center on nearest avatar
                 if (avatarManager && avatarManager.getAvatarCount() > 0) {
                     this.snapToNearestAvatar();
                 } else {
@@ -720,7 +739,7 @@
 
                     this.targetX += this.scrollVelocity * 0.5;
 
-                    // Ограничиваем границами
+                    // Limit by boundaries
                     this.targetX = Math.max(this.minX, Math.min(this.maxX, this.targetX));
 
                     this.updateCameraPosition();
@@ -785,7 +804,7 @@
             }
 
             snapToNearestSlot() {
-                // Центрируем на ближайшей позиции слота
+                // Center on nearest slot position
                 const slotNumber = Math.round(this.camera.position.x / CONFIG.SLOT_SPACING);
                 const clampedSlot = Math.max(-24, Math.min(24, slotNumber));
                 this.targetX = clampedSlot * CONFIG.SLOT_SPACING;
@@ -798,7 +817,7 @@
                 let nearestAvatar = null;
                 let minDistance = Infinity;
 
-                // Ищем ближайший аватар
+                // Find nearest avatar
                 for (const avatar of avatarManager.getAvatars()) {
                     const distance = Math.abs(avatar.xPosition - currentX);
                     if (distance < minDistance) {
@@ -808,7 +827,7 @@
                 }
 
                 if (nearestAvatar) {
-                    // Центрируем на ближайшем аватаре
+                    // Center on nearest avatar
                     this.targetX = nearestAvatar.xPosition;
                 }
             }
@@ -818,11 +837,11 @@
                     this.updateCameraPosition();
                 }
 
-                // При первом входе или при изменении количества аватаров
+                // On first entry or when avatar count changes
                 if (!this.initialized && window.currentUserId) {
                     const myAvatar = avatarManager?.getAvatar(window.currentUserId);
                     if (myAvatar?.xPosition !== undefined) {
-                        this.updateBounds(); // Обновляем границы
+                        this.updateBounds(); // Update bounds
                         this.targetX = myAvatar.xPosition;
                         this.initialized = true;
                         console.log('Camera centered on current user');
@@ -1041,7 +1060,7 @@
             animate();
         });
 
-        // Обработка потери WebGL контекста
+        // Handle WebGL context loss
         const canvas = document.getElementById('renderCanvas');
         canvas.addEventListener('webglcontextlost', (event) => {
             event.preventDefault();

@@ -3,6 +3,7 @@ using Hubbly.Domain.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace Hubbly.Application.Services;
 
@@ -23,7 +24,7 @@ public class RoomService : IRoomService
         InitializeFirstRoom();
     }
 
-    #region Инициализация
+    #region Initialization
 
     private void InitializeFirstRoom()
     {
@@ -33,7 +34,7 @@ public class RoomService : IRoomService
         {
             if (!_rooms.IsEmpty) return;
 
-            var firstRoom = new ChatRoom("Общая комната #1", _options.DefaultMaxUsers);
+            var firstRoom = new ChatRoom("General room #1", _options.DefaultMaxUsers);
             if (_rooms.TryAdd(firstRoom.Id, firstRoom))
             {
                 _logger.LogInformation("Initialized first room: {RoomName}", firstRoom.Name);
@@ -43,13 +44,13 @@ public class RoomService : IRoomService
 
     #endregion
 
-    #region Публичные методы
+    #region Public methods
 
     public Task<ChatRoom> GetOrCreateRoomForGuestAsync()
     {
         lock (_roomLock)
         {
-            // 1. Ищем активную комнату с местом
+            // 1. Search for active room with space
             var bestRoom = _rooms.Values
                 .Where(r => r.IsActive && !r.IsMarkedForDeletion && r.CurrentUsers < r.MaxUsers)
                 .OrderByDescending(r => r.CurrentUsers)
@@ -62,7 +63,7 @@ public class RoomService : IRoomService
                 return Task.FromResult(bestRoom);
             }
 
-            // 2. Проверка на максимальное количество комнат
+            // 2. Check for maximum number of rooms
             if (_rooms.Count >= _options.MaxTotalRooms)
             {
                 var leastBusy = _rooms.Values
@@ -77,7 +78,7 @@ public class RoomService : IRoomService
                 }
             }
 
-            // 3. Проверка на пустые комнаты
+            // 3. Check for empty rooms
             var emptyRooms = _rooms.Values.Count(r => r.IsEmpty);
             if (emptyRooms >= _options.MaxEmptyRooms)
             {
@@ -91,7 +92,7 @@ public class RoomService : IRoomService
                 return Task.FromResult(oldestEmpty);
             }
 
-            // 4. Создаем новую комнату
+            // 4. Create new room
             return Task.FromResult(CreateNewRoom());
         }
     }
@@ -100,7 +101,7 @@ public class RoomService : IRoomService
     {
         lock (_roomLock)
         {
-            // Удаляем из старой комнаты
+            // Remove from old room
             if (_userRoomMap.TryRemove(userId, out var oldRoomId))
             {
                 if (_rooms.TryGetValue(oldRoomId, out var oldRoom))
@@ -110,7 +111,7 @@ public class RoomService : IRoomService
                 }
             }
 
-            // Добавляем в новую комнату
+            // Add to new room
             if (!_rooms.TryGetValue(roomId, out var newRoom))
             {
                 throw new InvalidOperationException($"Room {roomId} not found");
@@ -172,7 +173,7 @@ public class RoomService : IRoomService
                 if (room.IsEmpty &&
                     room.LastActiveAt.HasValue &&
                     now - room.LastActiveAt.Value > emptyThreshold &&
-                    room != _rooms.Values.FirstOrDefault()) // Не удаляем первую комнату
+                    room != _rooms.Values.FirstOrDefault()) // Don't delete the first room
                 {
                     roomsToRemove.Add(room.Id);
                 }
@@ -198,22 +199,31 @@ public class RoomService : IRoomService
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private ChatRoom CreateNewRoom()
     {
-        var roomNumber = _rooms.Count + 1;
-        var newRoom = new ChatRoom($"Общая комната #{roomNumber}", _options.DefaultMaxUsers);
+        const int maxAttempts = 3;
+        int attempts = 0;
 
-        if (_rooms.TryAdd(newRoom.Id, newRoom))
+        while (attempts < maxAttempts)
         {
-            _logger.LogInformation("Created new room: {RoomName}", newRoom.Name);
-            return newRoom;
+            var roomNumber = _rooms.Count + 1;
+            var newRoom = new ChatRoom($"General room #{roomNumber}", _options.DefaultMaxUsers);
+
+            if (_rooms.TryAdd(newRoom.Id, newRoom))
+            {
+                _logger.LogInformation("Created new room: {RoomName}", newRoom.Name);
+                return newRoom;
+            }
+
+            attempts++;
+            _logger.LogWarning("Failed to add new room (attempt {Attempt}/{MaxAttempts})", attempts, maxAttempts);
+            Thread.SpinWait(1000); // Small delay before retry
         }
 
-        // Если не удалось добавить (очень редкий случай), пробуем рекурсивно
-        _logger.LogWarning("Failed to add new room, retrying...");
-        return GetOrCreateRoomForGuestAsync().GetAwaiter().GetResult();
+        _logger.LogError("Failed to create new room after {MaxAttempts} attempts", maxAttempts);
+        throw new InvalidOperationException($"Failed to create new room after {maxAttempts} attempts");
     }
 
     #endregion

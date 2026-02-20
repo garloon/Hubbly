@@ -11,14 +11,14 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
-    private readonly JwtTokenService _jwtTokenService;
+    private readonly IJwtTokenService _jwtTokenService;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         IUserRepository userRepository,
         IRefreshTokenRepository refreshTokenRepository,
-        JwtTokenService jwtTokenService,
+        IJwtTokenService jwtTokenService,
         JwtSettings jwtSettings,
         ILogger<AuthService> logger)
     {
@@ -29,7 +29,7 @@ public class AuthService : IAuthService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    #region Публичные методы
+    #region Public methods
 
     public async Task<AuthResponseDto> AuthenticateGuestAsync(string clientDeviceId, string? avatarConfigJson = null)
     {
@@ -91,7 +91,7 @@ public class AuthService : IAuthService
 
     #endregion
 
-    #region Приватные методы
+    #region Private methods
 
     private void ValidateDeviceId(string deviceId)
     {
@@ -239,7 +239,7 @@ public class AuthService : IAuthService
             attempts++;
         }
 
-        // Крайне маловероятно, но на всякий случай
+        // Highly unlikely, but just in case
         return $"Guest_{Guid.NewGuid():N}"[..12];
     }
 

@@ -4,40 +4,40 @@ using System.Text.Json.Serialization;
 namespace Hubbly.Domain.Entities;
 
 /// <summary>
-/// Конфигурация 3D аватара пользователя
+/// Configuration of user's 3D avatar
 /// </summary>
 public class AvatarConfig
 {
     /// <summary>
-    /// Пол аватара: "male" или "female"
+    /// Avatar gender: "male" or "female"
     /// </summary>
     [JsonPropertyName("gender")]
     public string Gender { get; set; } = "male";
 
     /// <summary>
-    /// ID базовой 3D модели (например: "male_base" или "female_base")
+    /// ID of base 3D model (e.g., "male_base" or "female_base")
     /// </summary>
     [JsonPropertyName("baseModelId")]
     public string BaseModelId { get; set; } = "male_base";
 
     /// <summary>
-    /// Поза аватара. Для MVP только "standing"
+    /// Avatar pose. For MVP only "standing"
     /// </summary>
     [JsonPropertyName("pose")]
     public string Pose { get; set; } = "standing";
 
     /// <summary>
-    /// Дополнительные компоненты (одежда, аксессуары и т.д.)
-    /// Ключ: тип компонента (например, "hair", "shirt")
-    /// Значение: ID компонента
+    /// Additional components (clothing, accessories, etc.)
+    /// Key: component type (e.g., "hair", "shirt")
+    /// Value: component ID
     /// </summary>
     [JsonPropertyName("components")]
     public Dictionary<string, string> Components { get; set; } = new();
 
-    // Статические методы для создания дефолтных конфигов
+    // Static methods for creating default configs
 
     /// <summary>
-    /// Дефолтный мужской аватар
+    /// Default male avatar
     /// </summary>
     public static AvatarConfig DefaultMale => new AvatarConfig
     {
@@ -48,7 +48,7 @@ public class AvatarConfig
     };
 
     /// <summary>
-    /// Дефолтный женский аватар
+    /// Default female avatar
     /// </summary>
     public static AvatarConfig DefaultFemale => new AvatarConfig
     {
@@ -59,15 +59,15 @@ public class AvatarConfig
     };
 
     /// <summary>
-    /// Создает дефолтный конфиг на основе пола
+    /// Creates default config based on gender
     /// </summary>
     public static AvatarConfig DefaultForGender(string gender) =>
         gender?.ToLower() == "female" ? DefaultFemale : DefaultMale;
 
-    // Сериализация/десериализация
+    // Serialization/Deserialization
 
     /// <summary>
-    /// Конвертирует конфиг в JSON строку
+    /// Converts config to JSON string
     /// </summary>
     public string ToJson()
     {
@@ -81,7 +81,7 @@ public class AvatarConfig
     }
 
     /// <summary>
-    /// Создает конфиг из JSON строки
+    /// Creates config from JSON string
     /// </summary>
     public static AvatarConfig FromJson(string json)
     {
@@ -100,29 +100,29 @@ public class AvatarConfig
         }
         catch (JsonException)
         {
-            // Если JSON поврежден, возвращаем дефолтный
+            // If JSON is corrupted, return default
             return DefaultMale;
         }
     }
 
     /// <summary>
-    /// Валидирует конфиг
+    /// Validates config
     /// </summary>
     public bool IsValid()
     {
-        // Проверяем обязательные поля
+        // Check required fields
         if (string.IsNullOrWhiteSpace(Gender)) return false;
         if (string.IsNullOrWhiteSpace(BaseModelId)) return false;
         if (string.IsNullOrWhiteSpace(Pose)) return false;
 
-        // Проверяем допустимые значения
+        // Check valid values
         var validGenders = new[] { "male", "female" };
         var validPoses = new[] { "standing", "sitting", "lean", "handsonhips", "armscrossed" };
 
         if (!validGenders.Contains(Gender.ToLower())) return false;
         if (!validPoses.Contains(Pose.ToLower())) return false;
 
-        // Базовая модель должна соответствовать полу
+        // Base model must match gender
         if (Gender == "male" && !BaseModelId.Contains("male", StringComparison.OrdinalIgnoreCase))
             return false;
         if (Gender == "female" && !BaseModelId.Contains("female", StringComparison.OrdinalIgnoreCase))
@@ -132,18 +132,18 @@ public class AvatarConfig
     }
 
     /// <summary>
-    /// Возвращает путь к 3D модели на основе конфига
+    /// Returns path to 3D model based on config
     /// </summary>
     public string GetModelPath()
     {
-        // Формируем путь к модели
-        // В MVP: "assets/avatars/{BaseModelId}.glb"
-        // В будущем: URL к CDN
+        // Form model path
+        // In MVP: "assets/avatars/{BaseModelId}.glb"
+        // In future: URL to CDN
         return $"assets/avatars/{BaseModelId}.glb";
     }
 
     /// <summary>
-    /// Возвращает Emoji для предпросмотра
+    /// Returns emoji for preview
     /// </summary>
     public string GetPreviewEmoji() =>
         Gender.ToLower() == "female" ? "👩" : "👨";

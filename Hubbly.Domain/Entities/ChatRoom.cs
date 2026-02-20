@@ -25,7 +25,7 @@ public class ChatRoom
 
     public void UserJoined()
     {
-        // ЗАЩИТА: нельзя превысить лимит комнаты
+        // PROTECTION: cannot exceed room limit
         if (CurrentUsers >= MaxUsers)
         {
             throw new InvalidOperationException($"Room is full (max {MaxUsers})");
