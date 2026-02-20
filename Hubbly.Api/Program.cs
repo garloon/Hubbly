@@ -73,6 +73,9 @@ public class Program
         services.AddHttpContextAccessor();
         services.AddControllers();
 
+        // Correlation ID middleware
+        services.AddSingleton<CorrelationIdMiddleware>();
+
         // Configure health checks
         ConfigureHealthChecks(services, configuration);
 
@@ -316,6 +319,7 @@ public class Program
         ConfigureStaticFiles(app);
 
         // Middleware
+        app.UseMiddleware<CorrelationIdMiddleware>();
         app.UseRateLimiter();
         app.UseCors("AllowMobileApp");
         app.UseAuthentication();
