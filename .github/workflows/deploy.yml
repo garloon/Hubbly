@@ -2,7 +2,7 @@ name: Deploy Hubbly API
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master ]
 
 jobs:
   deploy:
