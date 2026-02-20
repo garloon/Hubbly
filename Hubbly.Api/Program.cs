@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -75,9 +76,43 @@ public class Program
         // Configure health checks
         ConfigureHealthChecks(services, configuration);
 
-        // Swagger
+        // Swagger with JWT support
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+        services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Hubbly API",
+                Version = "v1",
+                Description = "Hubbly Backend API for 3D chat application",
+                Contact = new OpenApiContact
+                {
+                    Name = "Hubbly Team"
+                }
+            });
+
+            // JWT Bearer authentication
+            var securityScheme = new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter JWT Bearer token **only**",
+                Reference = new OpenApiReference
+                {
+                    Id = "Bearer",
+                    Type = ReferenceType.SecurityScheme
+                }
+            };
+
+            c.AddSecurityDefinition("Bearer", securityScheme);
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                { securityScheme, Array.Empty<string>() }
+            });
+        });
 
         // Database with Polly retry policy
         services.AddDbContext<AppDbContext>(options =>
