@@ -73,9 +73,6 @@ public class Program
         services.AddHttpContextAccessor();
         services.AddControllers();
 
-        // Correlation ID middleware
-        services.AddSingleton<CorrelationIdMiddleware>();
-
         // Configure health checks
         ConfigureHealthChecks(services, configuration);
 
