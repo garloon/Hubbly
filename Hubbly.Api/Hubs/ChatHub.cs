@@ -394,7 +394,7 @@ public class ChatHub : Hub
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var timeDiff = Math.Abs(now - clientTimestamp);
 
-        if (timeDiff > 30)
+        if (timeDiff > 300) // Increased from 30s to 5 minutes to account for client-server clock drift
         {
             _logger.LogWarning("Nonce rejected: time diff {TimeDiff}s", timeDiff);
             return false;
