@@ -894,13 +894,14 @@
             // Limit pixel ratio to 1.5 for better performance on mobile
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             
-            // Configure shadow maps for mobile compatibility
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            
-            // Set reasonable shadow map size for mobile (Three.js r121 uses mapSize)
-            renderer.shadowMap.mapSize.width = 512;
-            renderer.shadowMap.mapSize.height = 512;
+            // Configure shadow maps for mobile compatibility (only if supported)
+            if (renderer.shadowMap) {
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                console.log('✅ Shadow maps enabled');
+            } else {
+                console.warn('⚠️ Shadow maps not supported on this device');
+            }
 
             setupLighting();
             avatarManager = new AvatarManager();
