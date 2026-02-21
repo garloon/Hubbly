@@ -181,14 +181,6 @@ public class Program
                     .AddHttpClientInstrumentation()
                     .AddConsoleExporter()
                     .AddOtlpExporter(); // Send traces to OTLP Collector
-            })
-            .WithMetrics(metrics =>
-            {
-                metrics
-                    .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
-                    .AddConsoleExporter()
-                    .AddOtlpExporter(); // Send metrics to OTLP Collector
             });
 
         // Options
