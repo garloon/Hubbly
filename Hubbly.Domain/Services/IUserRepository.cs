@@ -11,4 +11,5 @@ public interface IUserRepository
     Task AddAsync(User user);
     Task UpdateAsync(User user);
     Task UpdateLastRoomIdAsync(Guid userId, Guid? roomId);
+    Task<Guid?> GetUserRoomAsync(Guid userId);
 }

@@ -113,5 +113,19 @@ public class UserRepository : IUserRepository
         _logger.LogDebug("LastRoomId updated successfully");
     }
 
+    public async Task<Guid?> GetUserRoomAsync(Guid userId)
+    {
+        _logger.LogDebug("Getting room for user {UserId}", userId);
+
+        var user = await _context.Users.FindAsync(userId);
+        var roomId = user?.LastRoomId;
+
+        _logger.LogDebug(roomId.HasValue
+            ? "User {UserId} is in room {RoomId}"
+            : "User {UserId} is not in any room", userId, roomId);
+
+        return roomId;
+    }
+
     #endregion
 }

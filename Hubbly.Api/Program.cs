@@ -244,6 +244,7 @@ public class Program
         // Domain Events
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<LoggingEventHandler>();
+        services.AddScoped<IDomainEventHandler<UserAvatarUpdatedEvent>, UserAvatarUpdatedEventHandler>();
 
         // Singletons
         services.AddSingleton<IRoomService>(sp =>

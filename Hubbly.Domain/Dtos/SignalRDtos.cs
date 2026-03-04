@@ -40,3 +40,13 @@ public class UserTypingData
     public string UserId { get; set; } = string.Empty;
     public string Nickname { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Data for user avatar update notification
+/// </summary>
+public class UserAvatarUpdatedData
+{
+    public string UserId { get; set; } = string.Empty;
+    public string Nickname { get; set; } = string.Empty;
+    public string AvatarConfigJson { get; set; } = "{}";
+}
